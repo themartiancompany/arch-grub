@@ -64,15 +64,19 @@ _get() {
 }
 
 _global_variables() {
-    pkg_list=""
-    pacman_conf=""
-    repo_name=""
-    repo_publisher=""
+    out_file=""
+    grub_cfg=""
+    embed_cfg=""
+    entry_name=""
+    arch_name=""
+    boot_method=""
     install_dir=""
+    boot_uuids=()
+    kernels=()
+    initrds=()
+    kernel_sums=()
+    initrd_sums=()
     work_dir=""
-    gpg_key=""
-    gpg_sender=""
-    gpg_home=""
     quiet=""
 }
 
@@ -144,31 +148,25 @@ _override_path() {
 
 _set_overrides() {
     local _embed
-    [[ -v override_embed_cfg ]] &&
+    [[ -v override_embed_cfg ]] && \
         _embed="-embed" 
     _override_path "grub" \
                    "cfg" \
          	  "/usr/lib/arch-grub/grub${_embed}.cfg"
-    _override_path "pacman" \
-                   "conf" \
-         	  "/etc/pacman.conf"
-    _set_override "repo" \
+    _set_override "entry" \
                   "name" \
-                  "${app_name}"
-    _set_override "repo" \
-                  "publisher" \
-         	 "${repo_name}"
+                  "Arch Linux"
+    _set_override "arch" \
+                  "name" \
+         	  "x86_64"
+    _set_override "boot" \
+                  "method" \
+         	  "efi"
     if [[ -v override_quiet ]]; then
       quiet="${override_quiet}"
     elif [[ -z "${quiet}" ]]; then
       quiet="y"
     fi
-    [[ ! -v override_gpg_key ]] || \
-      gpg_key="${override_gpg_key}"
-    [[ ! -v override_gpg_sender ]] || \
-      gpg_sender="${override_gpg_sender}"
-    [[ ! -v override_gpg_home ]] || \
-      gpg_home="${override_gpg_home}"
 }
 
 # Show help usage, with an exit status.
@@ -187,9 +185,9 @@ usage: $(_get "app" "name")} [options] <out_file>
      -e                   Whether to load a plain text
                           GRUB configuration from the GRUB
                           binary directory at runtime.
-     -L <application>     Sets an alternative entry name
+     -L <entry_name>      Sets an alternative entry name
 		          Default: '${"application}'
-     -a <arch>            Architecture
+     -a <arch_name>       Architecture
 		          Default: '${arch}'
      -p <boot_method>     Boot method.
 		          Default: '${arch}'
@@ -217,7 +215,7 @@ while getopts 'C:L:a:p:b:K:I:k:i:vh?' arg; do
     case "${arg}" in
         C) override_grub_cfg="${OPTARG}" ;;
 	e) override_embed_cfg="y" ;;
-        L) override_application="${OPTARG}" ;;
+        L) override_entry_name="${OPTARG}" ;;
         p) override_platform="${OPTARG}" ;;
 	b) read -r -a override_boot_uuids <<< "${OPTARG}" ;;
 	K) read -r -a override_kernels <<< "${OPTARG}" ;;
@@ -236,4 +234,4 @@ done
 shift $((OPTIND - 1))
 
 _set_overrides
-_install_pkg ""
+_get_grubmodules
