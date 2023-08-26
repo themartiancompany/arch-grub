@@ -196,7 +196,7 @@ _usage() {
            -d '' \
            usage_text << \
              ENDUSAGETEXT || true
-usage: $(_get "app" "name")} [options] <out_file>
+usage: $(_get "app" "name") [options] <out_file>
   options:
      -C <grub_cfg>        Whether to use a specific configuration
                           file to embed in GRUB.
@@ -205,7 +205,7 @@ usage: $(_get "app" "name")} [options] <out_file>
                           GRUB configuration from the GRUB
                           binary directory at runtime.
      -l <entry_name>      Sets an alternative entry name
-		          Default: '${"application}'
+		          Default: '${application}'
      -s <short_name>      Short entry name.
      -a <arch_name>       Architecture
 		          Default: '${arch}'
@@ -221,7 +221,7 @@ usage: $(_get "app" "name")} [options] <out_file>
      -i [initrd_sums ..]  SHA256 sum of the initrd.
      -P [keys ..]         Paths of the encryption keys inside
                           the boot disks.
-     -h                   This message
+     -h                   This message.
      -o <out_file>        Output GRUB binary.
 		          Default: '$(_get "out" "dir")'
      -v                   Enable verbose output
