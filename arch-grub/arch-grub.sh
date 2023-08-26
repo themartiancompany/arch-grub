@@ -133,6 +133,20 @@ _set_override() {
     fi
 }
 
+# Fill a bootloader configuration template and copy the result in a file
+# $1: bootloader configuration file (templatized, see profile directory)
+# $2: bootloader (empty?)
+_gen_bootloader_config() {
+    local _template="${1}"
+    sed "s|%DEVICE_SELECT_CMDLINE%|$(_get_device_select_cmdline)|g;
+         s|%ARCH%|${arch}|g;
+         s|%INSTALL_DIR%|/${install_dir}|g;
+         s|%KERNEL_PARAMS%|$(_get_kernel_params)|g;
+         s|%BOOTABLE_UUID%|$(_get_bootable_uuid)|g;
+         s|%FALLBACK_UUID%|$(_get_archiso_uuid)|g" \
+        "${_template}"
+}
+
 _override_path() {
     local _obj="${1}" \
           _var="${2}" \
@@ -190,18 +204,23 @@ usage: $(_get "app" "name")} [options] <out_file>
      -e                   Whether to load a plain text
                           GRUB configuration from the GRUB
                           binary directory at runtime.
-     -L <entry_name>      Sets an alternative entry name
+     -l <entry_name>      Sets an alternative entry name
 		          Default: '${"application}'
+     -s <short_name>      Short entry name.
      -a <arch_name>       Architecture
 		          Default: '${arch}'
      -p <boot_method>     Boot method.
 		          Default: '${arch}'
      -b [boot_uuids ..]   Boot disks UUIDS, sorted by
                           the repository.
-     -K [kernels ..]      Paths of the kernels inside the boot disks.
-     -I [initrds ..]      Paths of the initrds inside the boot disks.
+     -K [kernels ..]      Paths of the kernels inside the
+                          boot disks.
+     -I [initrds ..]      Paths of the initrds inside the
+                          boot disks.
      -k [kernel_sums ..]  SHA256 sums of the kernels.
      -i [initrd_sums ..]  SHA256 sum of the initrd.
+     -P [keys ..]         Paths of the encryption keys inside
+                          the boot disks.
      -h                   This message
      -o <out_file>        Output GRUB binary.
 		          Default: '$(_get "out" "dir")'
@@ -216,11 +235,12 @@ ENDUSAGETEXT
     exit "${1}"
 }
 
-while getopts 'C:L:a:p:b:K:I:k:i:vh?' arg; do
+while getopts 'C:L:l:a:p:b:K:I:k:i:vh?' arg; do
     case "${arg}" in
         C) override_grub_cfg="${OPTARG}" ;;
 	e) override_embed_cfg="y" ;;
         L) override_entry_name="${OPTARG}" ;;
+        l) override_short_name="${OPTARG}" ;;
         p) override_platform="${OPTARG}" ;;
 	b) read -r -a override_boot_uuids <<< "${OPTARG}" ;;
 	K) read -r -a override_kernels <<< "${OPTARG}" ;;
