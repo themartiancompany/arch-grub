@@ -51,7 +51,7 @@ _get() {
           _ref \
           _type
     _ref="${_obj}_${_var}[@]"
-    _type="$(declare -p "${_ref}")"
+    _type="$(declare -p "${_obj}_${_var}")"
     [[ "${_type}" == *"declare: "*": not found" ]] && \
       _msg=(
         "Attribute '${_var}' is not defined"
@@ -136,7 +136,12 @@ _set_override() {
 _override_path() {
     local _obj="${1}" \
           _var="${2}" \
-          _value="${3}"
+          _value="${3}" \
+          _path
+    _path="$(realpath -q -- "${_value}" || \
+	     true)"
+    [[ "${_path}" == "" ]] && \
+      _msg_error "${_value} is not a valid path." 1
     _set_override "${_obj}" \
                   "${_var}" \
                   "${_value}"
@@ -147,12 +152,12 @@ _override_path() {
 }
 
 _set_overrides() {
-    local _embed
+    local _embed=""
     [[ -v override_embed_cfg ]] && \
         _embed="-embed" 
     _override_path "grub" \
                    "cfg" \
-         	  "/usr/lib/arch-grub/grub${_embed}.cfg"
+         	   "/usr/lib/arch-grub/grub${_embed}.cfg"
     _set_override "entry" \
                   "name" \
                   "Arch Linux"
@@ -233,5 +238,6 @@ done
 
 shift $((OPTIND - 1))
 
+_global_variables
 _set_overrides
 _get_grubmodules
