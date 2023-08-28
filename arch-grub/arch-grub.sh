@@ -123,13 +123,49 @@ _get_grub_modules(){
 _gen_bootloader_config() {
     local _template="${1}"
     sed "s|%DEVICE_SELECT_CMDLINE%|$(_get_device_select_cmdline)|g;
-         s|%ARCH%|${arch}|g;
+         s|%ARCH%|${arch_name}|g;
          s|%BOOT_UUIDS%|${boot_uuids[@]}|g;
          s|%INSTALL_DIR%|/${install_dir}|g;
          s|%KERNEL_PARAMS%|$(_get_kernel_params)|g;
          s|%BOOTABLE_UUID%|$(_get_bootable_uuid)|g;
          s|%FALLBACK_UUID%|$(_get_archiso_uuid)|g" \
         "${_template}"
+}
+
+# Produces a standalone GRUB binary
+# $1: architecture (x86_64, i386)
+# $2: platform (efi, pc)
+# $3: output file or directory
+#     default name: BOOT<IA32/X64>.EFI
+_make_grub() {
+    local _grub_options=() \
+          _modules
+    _modules="$(_get_grub_modules \
+                    "$(_get_platform \
+                           "${_bootmode}")")"
+    _grub_options=(
+      -O "$(_get_arch \
+                "${_bootmode}")-$(_get_platform \
+                                      "${_bootmode}")"
+      --modules="${_modules}"
+      --locales="en@quot"
+      --themes=""
+      --sbat=/usr/share/grub/sbat.csv
+      --disable-shim-lock
+      --compress=xz)
+    [[ "$(_get_platform \
+              "${_bootmode}")" == "pc"* ]] && \
+      _embed_cfg="${_cfg}" \
+      _grub_options+=(
+        --install-modules="${_modules}"
+        --fonts="")
+    [ -d "${_out}" ] && \
+      _out="${_out}/$(_get_standalone_name \
+                                  "${_bootmode}")"
+    _grub_options+=(
+      -o "${_out}")
+    grub-mkstandalone "${_grub_options[@]}" \
+                      "boot/grub/grub.cfg=${_embed_cfg}"
 }
 
 # Reassign an object variable if an override
@@ -182,7 +218,7 @@ _override_path() {
 # Set defaults and, if present, overrides
 # from arch-grub command line option parameters
 _set_overrides() {
-    local _embed=""
+    local _embed
     [[ -v override_embed_cfg ]] && \
         _embed="-embed" 
     _override_path "grub" \
@@ -221,12 +257,12 @@ usage: $(_get "app" "name") [options] <out_file>
                           GRUB configuration from the GRUB
                           binary directory at runtime.
      -l <entry_name>      Sets an alternative entry name
-		          Default: '${application}'
+		          Default: '${entry_name}'
      -s <short_name>      Short entry name.
      -a <arch_name>       Architecture
-		          Default: '${arch}'
-     -p <boot_method>     Boot method.
-		          Default: '${arch}'
+			  Default: '$(_get "arch" "name")'
+     -p <boot_method>     Boot method (mbr, eltorito, efi).
+		          Default: '${boot_method}'
      -b [boot_uuids ..]   Boot disks UUIDS, sorted by
                           the repository.
      -K [kernels ..]      Paths of the kernels inside the
@@ -245,18 +281,21 @@ usage: $(_get "app" "name") [options] <out_file>
 		          Default: '$(_get "work" "dir")}'
 
   <out_file>    Output GRUB binary.
-                Default: BOOT<arch_code>.<platform>.
+                Default: BOOT<arch_code>.<platform>
 ENDUSAGETEXT
-    printf '%s' "$(_get "usage" "text")"
+    printf '%s\n' "$(_get "usage" "text")"
     exit "${1}"
 }
 
-while getopts 'C:L:l:a:p:b:K:I:k:i:vh?' arg; do
+_global_variables
+
+while getopts 'C:e:L:l:a:p:b:K:I:k:i:vh?' arg; do
     case "${arg}" in
         C) override_grub_cfg="${OPTARG}" ;;
 	e) override_embed_cfg="y" ;;
         L) override_entry_name="${OPTARG}" ;;
         l) override_short_name="${OPTARG}" ;;
+        a) override_arch_name="${OPTARG}" ;;
         p) override_platform="${OPTARG}" ;;
 	b) read -r -a override_boot_uuids <<< "${OPTARG}" ;;
 	K) read -r -a override_kernels <<< "${OPTARG}" ;;
@@ -274,6 +313,5 @@ done
 
 shift $((OPTIND - 1))
 
-_global_variables
 _set_overrides
-_get_grub_modules "${platform}"
+# _make_grub
