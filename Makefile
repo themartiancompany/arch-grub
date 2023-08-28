@@ -20,7 +20,7 @@ install: install-scripts install-doc
 
 install-scripts:
 
-        install -vDm 755 arch-grub/arch-grub.sh "$(BIN_DIR)/arch-grub"
+	install -vDm 755 arch-grub/arch-grub.sh "$(BIN_DIR)/arch-grub"
 	install -vDm 644 configs/grub-embed.cfg "$(BIN_DIR)/grub-embed.cfg"
 
 install-doc:
