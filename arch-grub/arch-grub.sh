@@ -113,10 +113,10 @@ _get_cfg_path() {
     _local_path="$(_get_script_dir)/../configs"
     _path="${_sys_path}"
     [[ ! -e "${_sys_path}" ]] && \
-      _msg_warning "${_sys_path} not found" \
-      _path="${_local_path}" \
-      [[ ! -e "${_local_path}" ]] && \
-        _msg_warning "${_local_path} not found"
+      _msg_warning "${_sys_path} not found" && \
+      _path="$(realpath ${_local_path} || true)" && \
+      [[ ! -e "${_path}" ]] && \
+        _msg_warning "${_path} not found" && \
         _msg_error "Missing configurations" 1
     echo "${_path}"
 }
@@ -322,7 +322,7 @@ _set_override() {
                        "${_var}")" ]]; then
         _set "${_obj}" \
              "${_var}" \
-             "${_value}"
+             "${_default}"
     fi
 }
 
@@ -356,7 +356,6 @@ _set_overrides() {
     local _embed_cfg=""
     [[ -v override_embed_cfg ]] && \
       _embed_cfg="-embed" 
-    _get_cfg_path
     _override_path "grub" \
                    "cfg" \
 		   "$(_get_cfg_path)/grub${_embed_cfg}.cfg"
