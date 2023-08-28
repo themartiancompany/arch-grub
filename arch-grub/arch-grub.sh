@@ -80,39 +80,109 @@ _global_variables() {
     quiet=""
 }
 
+_upper() {
+    local _string="${1}"
+    echo "${_string}" | \
+      tr '[:lower:]' '[:upper:]'
+}
+
+_get_platform() {
+    local _boot_method="${1}" \
+	  _platform
+    [[ "${_boot_method}" == "mbr" ]] && \
+      _platform="pc"
+    [[ "${_boot_method}" == "eltorito" ]] && \
+      _platform="pc-eltorito"
+    [[ "${_boot_method}" == "efi" ]] && \
+      _platform="efi"
+    echo "${_platform}"
+}
+
 # Get correct GRUB module list for a given platform
 # Module list from 
 # https://bugs.archlinux.org/task/71382#comment202911
 # $1: 'bios' or 'efi'
-_get_grub_modules(){
-    local _mode="${1}"
+_get_modules(){
+    local _platform="${1}"
     # Base modules
     _modules=(
-      afsplitter boot bufio chain configfile
-      disk echo ext2
-      gcry_sha256 halt iso9660 linux
-      loadenv loopback minicmd  normal 
-      part_apple part_gpt part_msdos
-      reboot regexp search search_fs_uuid test usb)
+      afsplitter
+      boot
+      bufio
+      chain
+      configfile
+      disk
+      echo
+      ext2
+      gcry_sha256
+      halt
+      iso9660
+      linux
+      loadenv
+      loopback
+      minicmd
+      normal 
+      part_apple
+      part_gpt
+      part_msdos
+      reboot
+      regexp
+      search
+      search_fs_uuid
+      test
+      usb)
     # Encryption specific modules
     _modules+=(
-      cryptodisk gcry_rijndael gcry_sha512
-      luks2 password_pbkdf2)
-    if [[ "${_mode}" != "pc" ]] && \
-       [[ "${_mode}" != "pc-eltorito" ]]; then
+      cryptodisk
+      gcry_rijndael
+      gcry_sha512
+      luks2
+      password_pbkdf2)
+    if [[ "${_platform}" != "pc" ]] && \
+       [[ "${_platform}" != "pc-eltorito" ]]; then
         _modules+=(
-          at_keyboard all_video btrfs cat echo
-          diskfilter echo efifwsetup f2fs fat
-          font gcry_crc gfxmenu gfxterm gzio
-          hfsplus jpeg keylayouts ls lsefi
-          lsefimmap lzopio ntfs png read 
-          search_fs_file search_label serial sleep
-          tpm trig usbserial_common usbserial_ftdi
-          usbserial_pl2303 usbserial_usbdebug video
-          xfs zstd)
-    elif [[ "${_mode}" == "pc" ]] || \
-         [[ "${_mode}" == "pc-eltorito" ]]; then
-        _modules+=(biosdisk)
+          at_keyboard
+	  all_video
+	  btrfs
+	  cat
+          diskfilter
+	  efifwsetup
+	  f2fs
+	  fat
+          font
+	  gcry_crc
+	  gfxmenu
+	  gfxterm
+	  gzio
+          hfsplus
+	  jpeg
+	  keylayouts
+	  ls
+	  lsefi
+          lsefimmap
+	  lzopio
+	  ntfs
+	  png
+	  read 
+          search_fs_file
+	  search_label
+	  serial
+	  sleep
+          tpm
+	  trig
+	  usbserial_common
+	  usbserial_ftdi
+          usbserial_pl2303
+	  usbserial_usbdebug
+	  video
+          xfs
+	  zstd
+        )
+    elif [[ "${_platform}" == "pc" ]] || \
+         [[ "${_platform}" == "pc-eltorito" ]]; then
+        _modules+=(
+	  biosdisk
+        )
     fi
     echo "${_modules[*]}"
 }
@@ -132,40 +202,68 @@ _gen_bootloader_config() {
         "${_template}"
 }
 
+_out_name() {
+    local _arch="${1}" \
+	  _boot_method="${2}" \
+          _CODE
+    [[ "${_arch}" == "i386" ]] && \
+      _CODE="IA32"
+    [[ "${_arch}" == "x86_64" ]] && \
+      _CODE="x64"
+    echo "BOOT$(_CODE).$(_upper "${_boot_method}")"
+}
+
 # Produces a standalone GRUB binary
 # $1: architecture (x86_64, i386)
 # $2: platform (efi, pc)
 # $3: output file or directory
 #     default name: BOOT<IA32/X64>.EFI
 _make_grub() {
-    local _grub_options=() \
-          _modules
-    _modules="$(_get_grub_modules \
-                    "$(_get_platform \
-                           "${_bootmode}")")"
-    _grub_options=(
-      -O "$(_get_arch \
-                "${_bootmode}")-$(_get_platform \
-                                      "${_bootmode}")"
+    local _boot_method="${1}" \
+	  _arch="${2}" \
+	  _cfg="${3}" \
+	  _out="${4}" \
+          _options=() \
+          _modules \
+	  _platform
+    _platform="$(_get_platform \
+	             "${_boot_method}")"
+    _modules="$(_get_modules \
+                    "${_platform}")"
+    _options=(
+      -O "${_arch}-${_platform}"
       --modules="${_modules}"
       --locales="en@quot"
       --themes=""
       --sbat=/usr/share/grub/sbat.csv
       --disable-shim-lock
       --compress=xz)
-    [[ "$(_get_platform \
-              "${_bootmode}")" == "pc"* ]] && \
-      _embed_cfg="${_cfg}" \
+    [[ "${_platform}" == "pc"* ]] && \
       _grub_options+=(
         --install-modules="${_modules}"
         --fonts="")
     [ -d "${_out}" ] && \
-      _out="${_out}/$(_get_standalone_name \
-                                  "${_bootmode}")"
+      _out="${_out}/$(_out_name "${_arch}" \
+                                "${_boot_method}")"
+    [[ "${_out}" == "" ]] && \
+      _out="$(_out_name "${_arch}" \
+                        "${_boot_method}")"
     _grub_options+=(
       -o "${_out}")
-    grub-mkstandalone "${_grub_options[@]}" \
-                      "boot/grub/grub.cfg=${_embed_cfg}"
+    grub-mkstandalone "${_options[@]}" \
+                      "boot/grub/grub.cfg=${_cfg}"
+}
+
+# Build the GRUB binary
+_build() {
+    _make_grub \
+      "$(_get "boot" \
+              "method")" \
+      "$(_get "arch" \
+              "name")" \
+      "$(_get "grub" \
+              "cfg")" \
+      "${out}"
 }
 
 # Reassign an object variable if an override
@@ -257,12 +355,12 @@ usage: $(_get "app" "name") [options] <out_file>
                           GRUB configuration from the GRUB
                           binary directory at runtime.
      -l <entry_name>      Sets an alternative entry name
-		          Default: '${entry_name}'
+			  Default: '$(_get "entry""name")'
      -s <short_name>      Short entry name.
      -a <arch_name>       Architecture
 			  Default: '$(_get "arch" "name")'
      -p <boot_method>     Boot method (mbr, eltorito, efi).
-		          Default: '${boot_method}'
+			  Default: '$(_get "boot" "method")'
      -b [boot_uuids ..]   Boot disks UUIDS, sorted by
                           the repository.
      -K [kernels ..]      Paths of the kernels inside the
@@ -273,6 +371,8 @@ usage: $(_get "app" "name") [options] <out_file>
      -i [initrd_sums ..]  SHA256 sum of the initrd.
      -P [keys ..]         Paths of the encryption keys inside
                           the boot disks.
+                          Set to "" for unencrypted disks.
+                          accordingly.
      -h                   This message.
      -o <out_file>        Output GRUB binary.
 		          Default: '$(_get "out" "dir")'
@@ -280,8 +380,8 @@ usage: $(_get "app" "name") [options] <out_file>
      -w <work_dir>        Set the working directory (can't be a bind mount).
 		          Default: '$(_get "work" "dir")}'
 
-  <out_file>    Output GRUB binary.
-                Default: BOOT<arch_code>.<platform>
+  <out>         Output directory or GRUB binary path.
+                Default: ./BOOT<arch_code>.<platform>
 ENDUSAGETEXT
     printf '%s\n' "$(_get "usage" "text")"
     exit "${1}"
@@ -313,5 +413,7 @@ done
 
 shift $((OPTIND - 1))
 
+_out="$(realpath -q -- "${1}" || true)"
+
 _set_overrides
-# _make_grub
+_build
