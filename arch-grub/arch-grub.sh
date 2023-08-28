@@ -86,13 +86,14 @@ _global_variables() {
 # $1: 'bios' or 'efi'
 _get_grub_modules(){
     local _mode="${1}"
+    # Base modules
     _modules=(
       afsplitter boot bufio chain configfile
       disk echo ext2
       gcry_sha256 halt iso9660 linux
       loadenv loopback minicmd  normal 
       part_apple part_gpt part_msdos
-      reboot search search_fs_uuid test usb)
+      reboot regexp search search_fs_uuid test usb)
     # Encryption specific modules
     _modules+=(
       cryptodisk gcry_rijndael gcry_sha512
@@ -104,7 +105,7 @@ _get_grub_modules(){
           diskfilter echo efifwsetup f2fs fat
           font gcry_crc gfxmenu gfxterm gzio
           hfsplus jpeg keylayouts ls lsefi
-          lsefimmap lzopio ntfs png read regexp
+          lsefimmap lzopio ntfs png read 
           search_fs_file search_label serial sleep
           tpm trig usbserial_common usbserial_ftdi
           usbserial_pl2303 usbserial_usbdebug video
@@ -116,6 +117,27 @@ _get_grub_modules(){
     echo "${_modules[*]}"
 }
 
+# Fill a bootloader configuration template and copy the result in a file
+# $1: bootloader configuration file (templatized, see profile directory)
+# $2: bootloader (empty?)
+_gen_bootloader_config() {
+    local _template="${1}"
+    sed "s|%DEVICE_SELECT_CMDLINE%|$(_get_device_select_cmdline)|g;
+         s|%ARCH%|${arch}|g;
+         s|%BOOT_UUIDS%|${boot_uuids[@]}|g;
+         s|%INSTALL_DIR%|/${install_dir}|g;
+         s|%KERNEL_PARAMS%|$(_get_kernel_params)|g;
+         s|%BOOTABLE_UUID%|$(_get_bootable_uuid)|g;
+         s|%FALLBACK_UUID%|$(_get_archiso_uuid)|g" \
+        "${_template}"
+}
+
+# Reassign an object variable if an override
+# variable is defined; otherwise it defaults
+# to an input default.
+# $1: object
+# $2: variable
+# $3: default value
 _set_override() {
     local _obj="${1}" \
           _var="${2}" \
@@ -133,20 +155,12 @@ _set_override() {
     fi
 }
 
-# Fill a bootloader configuration template and copy the result in a file
-# $1: bootloader configuration file (templatized, see profile directory)
-# $2: bootloader (empty?)
-_gen_bootloader_config() {
-    local _template="${1}"
-    sed "s|%DEVICE_SELECT_CMDLINE%|$(_get_device_select_cmdline)|g;
-         s|%ARCH%|${arch}|g;
-         s|%INSTALL_DIR%|/${install_dir}|g;
-         s|%KERNEL_PARAMS%|$(_get_kernel_params)|g;
-         s|%BOOTABLE_UUID%|$(_get_bootable_uuid)|g;
-         s|%FALLBACK_UUID%|$(_get_archiso_uuid)|g" \
-        "${_template}"
-}
-
+# Re-assign an object variable pointing to
+# a path if an override variable is defined,
+# otherwise it defaults to an input path
+# $1: object
+# $2: variable
+# $3: value (a path)
 _override_path() {
     local _obj="${1}" \
           _var="${2}" \
@@ -165,6 +179,8 @@ _override_path() {
                                 "${_var}")")"
 }
 
+# Set defaults and, if present, overrides
+# from arch-grub command line option parameters
 _set_overrides() {
     local _embed=""
     [[ -v override_embed_cfg ]] && \
@@ -260,4 +276,4 @@ shift $((OPTIND - 1))
 
 _global_variables
 _set_overrides
-_get_grubmodules
+_get_grub_modules "${platform}"
