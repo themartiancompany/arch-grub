@@ -5,6 +5,18 @@
 set -e -u
 shopt -s extglob
 
+# Control the environment
+umask 0022
+export LC_ALL="C.UTF-8"
+# LC_ALL=C.UTF-8, unlike LC_ALL=C, does not override LANGUAGE.
+# See https://sourceware.org/bugzilla/show_bug.cgi?id=16621 \
+# and https://savannah.gnu.org/bugs/?62815
+[[ -v LANGUAGE ]] && \
+  unset LANGUAGE
+[[ -v SOURCE_DATE_EPOCH ]] || \
+  printf -v SOURCE_DATE_EPOCH '%(%s)T' -1
+export SOURCE_DATE_EPOCH
+
 # Set application name from the script's file name
 app_name="${0##*/}"
 # Show a WARNING message
@@ -256,6 +268,8 @@ _make_grub() {
 
 # Build the GRUB binary
 _build() {
+    [[ "${quiet}" == "y" ]] || \
+      _show_config
     _make_grub \
       "$(_get "boot" \
               "method")" \
@@ -318,10 +332,10 @@ _override_path() {
 _set_overrides() {
     local _embed
     [[ -v override_embed_cfg ]] && \
-        _embed="-embed" 
+      _embed_cfg="-embed" 
     _override_path "grub" \
                    "cfg" \
-         	   "/usr/lib/arch-grub/grub${_embed}.cfg"
+         	   "/usr/lib/arch-grub/grub${_embed_cfg}.cfg"
     _set_override "entry" \
                   "name" \
                   "Arch Linux"
@@ -368,7 +382,7 @@ usage: $(_get "app" "name") [options] <out_file>
      -I [initrds ..]      Paths of the initrds inside the
                           boot disks.
      -k [kernel_sums ..]  SHA256 sums of the kernels.
-     -i [initrd_sums ..]  SHA256 sum of the initrd.
+     -i [initrd_sums ..]  SHA256 sums of the initrd.
      -P [keys ..]         Paths of the encryption keys inside
                           the boot disks.
                           Set to "" for unencrypted disks.
@@ -387,20 +401,38 @@ ENDUSAGETEXT
     exit "${1}"
 }
 
+# Shows configuration options.
+_show_config() {
+    local build_date
+    TZ=UTC printf -v build_date '%(%FT%R%z)T' "${SOURCE_DATE_EPOCH}"
+    _msg_info "${app_name} configuration settings"
+    _msg_info "       Configuration file:   $(_get "grub" "cfg")"
+    _msg_info " Plain-text configuration:   ${_embed_cfg:-n}"
+    _msg_info "             Architecture:   $(_get "arch" "name")"
+    _msg_info "               Entry name:   $(_get "entry" "name")"
+    _msg_info "               Short name:   $(_get "short" "name")"
+    _msg_info "              Boot Method:   $(_get "boot" "method")"
+    _msg_info "               Boot UUIDS:   $(_get "boot" "uuids")"
+    _msg_info "                  Kernels:   ${kernels[@]}"
+    _msg_info "                  Initrds:   ${initrds[@]}"
+    _msg_info "               Build date:   $(_get "build" "date")"
+    _msg_info "              Output file:   ${out}"
+}
+
 _global_variables
 
-while getopts 'C:e:L:l:a:p:b:K:I:k:i:vh?' arg; do
+while getopts 'C:e:L:l:a:b:u:K:k:I:i:vh?' arg; do
     case "${arg}" in
         C) override_grub_cfg="${OPTARG}" ;;
 	e) override_embed_cfg="y" ;;
         L) override_entry_name="${OPTARG}" ;;
         l) override_short_name="${OPTARG}" ;;
         a) override_arch_name="${OPTARG}" ;;
-        p) override_platform="${OPTARG}" ;;
-	b) read -r -a override_boot_uuids <<< "${OPTARG}" ;;
+        b) override_boot_method="${OPTARG}" ;;
+	u) read -r -a override_boot_uuids <<< "${OPTARG}" ;;
 	K) read -r -a override_kernels <<< "${OPTARG}" ;;
-	I) read -r -a override_initrds <<< "${OPTARG}" ;;
 	k) read -r -a override_kernel_sums <<< "${OPTARG}" ;;
+	I) read -r -a override_initrds <<< "${OPTARG}" ;;
 	i) read -r -a override_initrd_sums <<< "${OPTARG}" ;;
         v) override_quiet="n" ;;
         h|?) _usage 0 ;;
