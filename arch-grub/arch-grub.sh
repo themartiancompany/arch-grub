@@ -76,7 +76,7 @@ _get() {
 }
 
 _global_variables() {
-    out_file=""
+    out=""
     grub_cfg=""
     embed_cfg=""
     entry_name=""
@@ -84,6 +84,7 @@ _global_variables() {
     boot_method=""
     install_dir=""
     boot_uuids=()
+    boot_keys=()
     kernels=()
     initrds=()
     kernel_sums=()
@@ -330,7 +331,7 @@ _override_path() {
 # Set defaults and, if present, overrides
 # from arch-grub command line option parameters
 _set_overrides() {
-    local _embed
+    local _embed_cfg=""
     [[ -v override_embed_cfg ]] && \
       _embed_cfg="-embed" 
     _override_path "grub" \
@@ -373,17 +374,17 @@ usage: $(_get "app" "name") [options] <out_file>
      -s <short_name>      Short entry name.
      -a <arch_name>       Architecture
 			  Default: '$(_get "arch" "name")'
-     -p <boot_method>     Boot method (mbr, eltorito, efi).
+     -b <boot_method>     Boot method (mbr, eltorito, efi).
 			  Default: '$(_get "boot" "method")'
-     -b [boot_uuids ..]   Boot disks UUIDS, sorted by
+     -u [boot_uuids ..]   Boot disks UUIDS, sorted by
                           the repository.
      -K [kernels ..]      Paths of the kernels inside the
                           boot disks.
+     -k [kernel_sums ..]  SHA256 sums of the kernels.
      -I [initrds ..]      Paths of the initrds inside the
                           boot disks.
-     -k [kernel_sums ..]  SHA256 sums of the kernels.
      -i [initrd_sums ..]  SHA256 sums of the initrd.
-     -P [keys ..]         Paths of the encryption keys inside
+     -p [boot_keys ..]    Paths of the encryption keys inside
                           the boot disks.
                           Set to "" for unencrypted disks.
                           accordingly.
@@ -415,13 +416,14 @@ _show_config() {
     _msg_info "               Boot UUIDS:   $(_get "boot" "uuids")"
     _msg_info "                  Kernels:   ${kernels[@]}"
     _msg_info "                  Initrds:   ${initrds[@]}"
+    _msg_info "                     Keys:   ${initrds[@]}"
     _msg_info "               Build date:   $(_get "build" "date")"
     _msg_info "              Output file:   ${out}"
 }
 
 _global_variables
 
-while getopts 'C:e:L:l:a:b:u:K:k:I:i:vh?' arg; do
+while getopts 'C:e:L:l:a:b:u:K:k:I:i:p:vh?' arg; do
     case "${arg}" in
         C) override_grub_cfg="${OPTARG}" ;;
 	e) override_embed_cfg="y" ;;
@@ -434,6 +436,7 @@ while getopts 'C:e:L:l:a:b:u:K:k:I:i:vh?' arg; do
 	k) read -r -a override_kernel_sums <<< "${OPTARG}" ;;
 	I) read -r -a override_initrds <<< "${OPTARG}" ;;
 	i) read -r -a override_initrd_sums <<< "${OPTARG}" ;;
+	p) read -r -a boot_keys <<< "${OPTARG}" ;;
         v) override_quiet="n" ;;
         h|?) _usage 0 ;;
         *)
@@ -445,7 +448,8 @@ done
 
 shift $((OPTIND - 1))
 
-_out="$(realpath -q -- "${1}" || true)"
+(( ${#} == 1 )) && \
+  _out="$(realpath -q -- "${1}" || true)"
 
 _set_overrides
 _build
