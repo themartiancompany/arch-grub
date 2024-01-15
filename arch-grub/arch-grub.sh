@@ -306,8 +306,7 @@ _out_name() {
   [[ "${_arch}" == "x86_64" ]] && \
     _CODE="x64"
   echo \
-    "BOOT$( \
-      _CODE).$( \
+    "BOOT${_CODE}.$( \
       _upper \
         "${_boot_method}")"
 }
