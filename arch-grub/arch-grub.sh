@@ -15,9 +15,12 @@ _globals() {
     0022
   export \
     LC_ALL="C.UTF-8"
-  # LC_ALL=C.UTF-8, unlike LC_ALL=C, does not override LANGUAGE.
-  # See https://sourceware.org/bugzilla/show_bug.cgi?id=16621 \
-  # and https://savannah.gnu.org/bugs/?62815
+  # LC_ALL=C.UTF-8, unlike LC_ALL=C,
+  # does not override LANGUAGE.
+  # See 
+  # https://sourceware.org/bugzilla/show_bug.cgi?id=16621
+  # and 
+  # https://savannah.gnu.org/bugs/?62815
   [[ -v LANGUAGE ]] && \
     unset \
       LANGUAGE
@@ -93,7 +96,9 @@ _get() {
     _msg=(
       "Attribute '${_var}' is not defined"
       "for object '${_obj}'") && \
-    _msg_error "${_msg[*]}" 1
+    _msg_error \
+      "${_msg[*]}" \
+      1
   [[ "${_type}" == "declare -A "* ]] && \
     echo \
       "${_image[${_var}]}" && \
@@ -497,6 +502,7 @@ usage: $(_get "app" "name") [options] <out_file>
      -e                   Whether to load a plain text
                           GRUB configuration from the GRUB
                           binary directory at runtime.
+			  Default: '${embed}'.
      -l <entry_name>      Sets an alternative entry name
 			  Default: '$(_get "entry" "name")'
      -s <short_name>      Short entry name.
