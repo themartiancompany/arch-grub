@@ -31,6 +31,18 @@ _globals() {
   export \
     SOURCE_DATE_EPOCH
   
+  # Get script path
+  _path="$( \
+    export \
+      _OLDPWD="$(pwd)" && \
+       cd \
+         "$(dirname \
+              "${BASH_SOURCE[0]}")" && \
+       echo "$(pwd)" && \
+       cd "${_OLDPWD}" && \
+       unset _OLDPWD)"
+  unset _OLDPWD
+
   # Set application name from the script's file name
   app_name="${0##*/}"
 }
@@ -124,6 +136,11 @@ _global_variables() {
   initrd_sums=()
   work_dir=""
   quiet=""
+}
+
+_requirements() {
+  _check_cmd \
+    "grub-mkstandalone"
 }
 
 _upper() {
@@ -387,6 +404,40 @@ _build() {
     "${out}"
 }
 
+_check_cmd(){
+  local \
+    _cmd="${1}" \
+    _cmd_var \
+    _flag="" \
+    _pkg
+  shift \
+    1
+  _pkg="$@"
+  _cmd_var="$(echo \
+                "${_cmd}" | \
+                sed \
+                  "s/-/_/g")"
+  command \
+     -v \
+     "${_cmd}" &> /dev/null && \
+    printf \
+      -v "_${_cmd_var}" \
+      "$(which \
+           "${_cmd}")" && \
+    _flag=true
+  [ -e "${_path}/${_cmd}" ] && \
+    printf \
+      -v "_${_cmd_var}" \
+      "${_path}/${_cmd}" && \
+    _flag=true
+  [[ "${_flag}" != "true" ]] && \
+    [[ "${_pkg}" != "" ]] && 
+      _cmd="${_pkg}"
+    _msg_error \
+      "Install ${_cmd}" \
+      1
+}
+
 # Reassign an object variable
 # if an override variable is defined;
 # otherwise it defaults
@@ -503,28 +554,24 @@ usage: $(_get "app" "name") [options] <out_file>
                           GRUB configuration from the GRUB
                           binary directory at runtime.
 			  Default: '${embed}'.
-     -l <entry_name>      Sets an alternative entry name
+     -L <entry_name>      Sets an alternative entry name
 			  Default: '$(_get "entry" "name")'
-     -s <short_name>      Short entry name.
+     -l <short_name>      Short entry name.
      -a <arch_name>       Architecture
 			  Default: '$(_get "arch" "name")'
      -b <boot_method>     Boot method (mbr, eltorito, efi).
 			  Default: '$(_get "boot" "method")'
-     -u [boot_uuids ..]   Boot disks UUIDS, sorted by
-                          the repository.
-     -K [kernels ..]      Paths of the kernels inside the
+     -u <boot_uuids>      Add a boot disk UUID, to the resulting
+                          bootloader.
+     -K <kernel>          Add the path of a kernel inside a boot disk.
+     -k <kernel_sum>      SHA256 sums of the kernel.
+     -I <initrds ..>      Paths of the initrds inside the
                           boot disks.
-     -k [kernel_sums ..]  SHA256 sums of the kernels.
-     -I [initrds ..]      Paths of the initrds inside the
-                          boot disks.
-     -i [initrd_sums ..]  SHA256 sums of the initrd.
-     -p [boot_keys ..]    Paths of the encryption keys inside
+     -i <initrd_sums>     SHA256 sum of the initrd.
+     -p <boot_keys>       Paths of the encryption keys inside
                           the boot disks.
                           Set to "" for unencrypted disks.
-                          accordingly.
      -h                   This message.
-     -o <out_file>        Output GRUB binary.
-		          Default: '$(_get "out" "dir")'
      -v                   Enable verbose output
      -w <work_dir>        Set the working directory (can't be a bind mount).
 		          Default: '$(_get "work" "dir")}'
@@ -561,13 +608,15 @@ _show_config() {
   _msg_info "               Boot UUIDS:   $(_get "boot" "uuids")"
   _msg_info "                  Kernels:   ${kernels[@]}"
   _msg_info "                  Initrds:   ${initrds[@]}"
-  _msg_info "                     Keys:   ${initrds[@]}"
+  _msg_info "                Boot Keys:   ${boot_keys[@]}"
   _msg_info "               Build date:   $(_get "build" "date")"
   _msg_info "              Output file:   ${out}"
 }
 
 _globals
 _global_variables
+
+_requirements
 
 while \
   getopts \
@@ -581,12 +630,12 @@ while \
     l) override_short_name="${OPTARG}" ;;
     a) override_arch_name="${OPTARG}" ;;
     b) override_boot_method="${OPTARG}" ;;
-    u) read -r -a override_boot_uuids <<< "${OPTARG}" ;;
-    K) read -r -a override_kernels <<< "${OPTARG}" ;;
-    k) read -r -a override_kernel_sums <<< "${OPTARG}" ;;
-    I) read -r -a override_initrds <<< "${OPTARG}" ;;
-    i) read -r -a override_initrd_sums <<< "${OPTARG}" ;;
-    p) read -r -a boot_keys <<< "${OPTARG}" ;;
+    u) boot_uuids+=("${OPTARG}") ;;
+    K) kernels+=("${OPTARG}") ;;
+    k) kernel_sums+=("${OPTARG}") ;;
+    I) initrds+=("${OPTARG}") ;;
+    i) initrds_sums+=("${OPTARG}") ;;
+    p) boot_keys+=("${OPTARG}") ;;
     v) override_quiet="n" ;;
     h|?) _usage 0 ;;
     *)
