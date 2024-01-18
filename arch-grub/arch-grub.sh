@@ -413,10 +413,11 @@ _check_cmd(){
   shift \
     1
   _pkg="$@"
-  _cmd_var="$(echo \
-                "${_cmd}" | \
-                sed \
-                  "s/-/_/g")"
+  _cmd_var="$( \
+    echo \
+      "${_cmd}" | \
+      sed \
+        "s/-/_/g")"
   command \
      -v \
      "${_cmd}" &> /dev/null && \
