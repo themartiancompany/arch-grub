@@ -297,6 +297,7 @@ _get_modules(){
 #     (templatized, see profile directory)
 # $2: bootloader (empty?)
 _gen_bootloader_config() {
+  # TODO: To be rewritten
   local \
     _template="${1}" \
     _cmd=()
