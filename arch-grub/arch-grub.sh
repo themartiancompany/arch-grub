@@ -423,21 +423,26 @@ _check_cmd(){
      -v \
      "${_cmd}" &> /dev/null && \
     printf \
-      -v "_${_cmd_var}" \
-      "$(which \
-           "${_cmd}")" && \
+      -v \
+        "_${_cmd_var}" \
+      "$( \
+        command \
+          -v \
+          "${_cmd}")" && \
     _flag=true
   [ -e "${_path}/${_cmd}" ] && \
     printf \
       -v "_${_cmd_var}" \
       "${_path}/${_cmd}" && \
     _flag=true
-  [[ "${_flag}" != "true" ]] && \
-    [[ "${_pkg}" != "" ]] && 
+  if [[ "${_flag}" != "true" ]]; then
+    if [[ "${_pkg}" != "" ]]; then
       _cmd="${_pkg}"
+    fi
     _msg_error \
       "Install ${_cmd}" \
       1
+  fi
 }
 
 # Reassign an object variable
@@ -551,11 +556,11 @@ usage: $(_get "app" "name") [options] <out_file>
   options:
      -C <grub_cfg>        Whether to use a specific configuration
                           file to embed in GRUB.
-		          Default: '$(_get "grub" "cfg")}'
+		          Default: '$(_get "grub" "cfg")'
      -e                   Whether to load a plain text
                           GRUB configuration from the GRUB
                           binary directory at runtime.
-			  Default: '${embed}'.
+			  Default: '${embed_cfg}'.
      -L <entry_name>      Sets an alternative entry name
 			  Default: '$(_get "entry" "name")'
      -l <short_name>      Short entry name.
