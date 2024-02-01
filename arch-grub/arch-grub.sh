@@ -47,6 +47,15 @@ _globals() {
   app_name="${0##*/}"
 }
 
+# Show an INFO message
+# $1: message string
+_msg_info() {
+    local _msg="${1}"
+    [[ "${quiet}" == "y" ]] || \
+      printf '[%s] INFO: %s\n' "${app_name}" "${_msg}"
+}
+
+
 # Show a WARNING message
 # $1: message string
 _msg_warning() {
