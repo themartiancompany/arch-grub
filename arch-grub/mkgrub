@@ -512,21 +512,16 @@ _make_grub() {
     --compress=xz
   )
   [[ "${_platform}" == "pc"* ]] && \
-    _grub_options+=(
+    _options+=(
       --install-modules="${_modules}"
       --fonts=""
     )
-  [ -d "${_out}" ] && \
-    _out="${_out}/$( \
-      _out_name \
-        "${_arch}" \
-        "${_boot_method}")"
   [[ "${_out}" == "" ]] && \
     _out="$( \
       _out_name \
         "${_arch}" \
         "${_boot_method}")"
-  _grub_options+=(
+  _options+=(
     -o "${_out}")
   grub-mkstandalone \
     "${_options[@]}" \
@@ -537,7 +532,6 @@ _make_grub() {
 _build() {
   [[ "${quiet}" == "y" ]] || \
     _show_config
-  _msg_info "${out}"
   _make_grub \
     "$( \
       _get \
@@ -669,6 +663,7 @@ _set_overrides() {
   elif [[ -z "${color}" ]]; then
     color="n"
   fi
+
 }
 
 # Show help usage, with an exit status.
@@ -757,9 +752,8 @@ _show_config() {
       -v _build_date \
       '%(%FT%R%z)T' \
       "${SOURCE_DATE_EPOCH}"
-  _msg_info "Build date:"
-  _msg_info "  ${_build_date}"
-  _msg_info "${app_name} configuration settings"
+  _msg_info "${app_name} configuration"
+  _msg_info "               Build Date:   $(_get "_build" "date")"
   _msg_info "       Configuration file:   $(_get "grub" "cfg")"
   _msg_info " Plain-text configuration:   $(_get "plain" "text")"
   _msg_info "             Architecture:   $(_get "arch" "name")"
@@ -887,4 +881,15 @@ out="$( \
     -q -- \
     "${out}")"
 _set_overrides
+[ -d "${out}" ] && \
+  out="${out}/$( \
+    _out_name \
+      "$( \
+        _get \
+	  "arch" \
+	  "name")" \
+      "$( \
+        _get \
+	  "arch" \
+	  "name")")"
 _build
