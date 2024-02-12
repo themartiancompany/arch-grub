@@ -285,13 +285,35 @@ _get_script_dir() {
         "${BASH_SOURCE[0]}")"
 }
 
+_get_sysbin() {
+ dirname \
+  "$( \
+    command \
+     -v \
+     "$( \
+       _get \
+         "app"\
+	 "name")")"
+}
+
+_get_sysusr() {
+ dirname \
+  "$(_get_sysbin)"
+}
+
 _get_cfg_path() {
   local \
     _sys_path \
     _local_path \
     _path
-  _sys_path="/usr/lib/$(_get "app" "name")/configs"
-  _local_path="$(_get_script_dir)/../configs"
+  _sys_path="$( \
+    _get_sysusr)/lib/$( \
+      _get \
+        "app" \
+	"name")/configs"
+  _local_path="$( \
+    dirname \
+      "$(_get_script_dir)")/configs"
   _path="${_sys_path}"
   [[ ! -e "${_sys_path}" ]] && \
     _msg_warning \
@@ -306,7 +328,8 @@ _get_cfg_path() {
       _msg_error \
         "Missing configurations" \
 	1
-  echo \
+  printf \
+    "%s" \
     "${_path}"
 }
 
