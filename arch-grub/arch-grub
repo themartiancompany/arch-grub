@@ -222,10 +222,12 @@ _check_cmd(){
     _cmd="${1}" \
     _cmd_var \
     _flag="" \
-    _pkg
+    _pkg=()
   shift \
     1
-  _pkg="$@"
+  _pkgs=(
+    "$@"
+  )
   _cmd_var="$( \
     printf \
       "%s" \
@@ -252,8 +254,8 @@ _check_cmd(){
       "${_path}/${_cmd}" && \
     _flag=true
   if [[ "${_flag}" != "true" ]]; then
-    if [[ "${_pkg}" != "" ]]; then
-      _cmd="${_pkg}"
+    if [[ "${_pkgs[*]}" != "" ]]; then
+      _cmd="${_pkgs[*]}"
     fi
     _msg_error \
       "Install ${_cmd}" \
