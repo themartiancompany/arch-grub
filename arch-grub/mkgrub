@@ -516,11 +516,6 @@ _make_grub() {
       --install-modules="${_modules}"
       --fonts=""
     )
-  [[ "${_out}" == "" ]] && \
-    _out="$( \
-      _out_name \
-        "${_arch}" \
-        "${_boot_method}")"
   _options+=(
     -o "${_out}")
   grub-mkstandalone \
@@ -632,7 +627,7 @@ _set_overrides() {
   [[ "$(_get \
           "plain" \
 	  "text")" == true ]] && \
-    _embed_cfg="-embed" 
+    _embed_cfg="-embed"
   _override_path \
     "grub" \
     "cfg" \
@@ -891,6 +886,6 @@ _set_overrides
 	  "name")" \
       "$( \
         _get \
-	  "arch" \
-	  "name")")"
+	  "boot" \
+	  "method")")"
 _build
