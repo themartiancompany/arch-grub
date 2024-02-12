@@ -11,7 +11,6 @@ _globals() {
   shopt \
     -s \
       extglob
-
   # Control the environment
   umask \
     0022
@@ -80,7 +79,6 @@ _global_variables() {
   color=""
   quiet=""
 }
-
 
 # Show an INFO message
 # $1: message string
@@ -223,7 +221,7 @@ _check_cmd(){
     _cmd="${1}" \
     _cmd_var \
     _flag="" \
-    _pkg=()
+    _pkgs=()
   shift \
     1
   _pkgs=(
@@ -267,16 +265,6 @@ _check_cmd(){
 _requirements() {
   _check_cmd \
     "grub-mkstandalone"
-}
-
-_upper() {
-  local \
-    _string="${1}"
-  echo \
-    "${_string}" | \
-    tr \
-      '[:lower:]' \
-      '[:upper:]'
 }
 
 _get_script_dir() {
@@ -332,6 +320,16 @@ _get_cfg_path() {
   printf \
     "%s" \
     "${_path}"
+}
+
+_upper() {
+  local \
+    _string="${1}"
+  echo \
+    "${_string}" | \
+    tr \
+      '[:lower:]' \
+      '[:upper:]'
 }
 
 _get_platform() {
@@ -650,6 +648,10 @@ _set_overrides() {
     "name" \
     "Arch Linux"
   _set_override \
+    "short" \
+    "name" \
+    "arch"
+  _set_override \
     "arch" \
     "name" \
     "x86_64"
@@ -725,10 +727,31 @@ ENDUSAGETEXT
     "${1}"
 }
 
+_display_flags() {
+  local \
+    _flags=(
+      "${1}"
+    )
+  for _flag \
+    in "${_flags[@]}"; do
+  _msg_info "                              ${_flag}"
+  done
+}
+
 # Shows configuration options.
 _show_config() {
   local \
-    _build_date
+    _build_date \
+    _boot_uuids=()
+  _boot_uuids=( $( \
+    _get \
+      "boot" \
+      "uuids")
+  )
+  [[ "${_boot_uuids[*]}" == "" ]] && \
+    _boot_uuids+=(
+      "GRUB drive"
+    )
   TZ=UTC \
     printf \
       -v _build_date \
@@ -743,10 +766,14 @@ _show_config() {
   _msg_info "               Entry name:   $(_get "entry" "name")"
   _msg_info "               Short name:   $(_get "short" "name")"
   _msg_info "              Boot Method:   $(_get "boot" "method")"
-  _msg_info "               Boot UUIDS:   $(_get "boot" "uuids")"
-  _msg_info "                  Kernels:   ${kernels[*]}"
-  _msg_info "                  Initrds:   ${initrds[*]}"
-  _msg_info "                Boot Keys:   ${boot_keys[*]}"
+  _msg_info "               Boot UUIDS:"
+  _display_flags                          "${_boot_uuids[*]}"
+  _msg_info "                  Kernels:"
+  _display_flags                          "${kernels[*]}"
+  _msg_info "                  Initrds:"
+  _display_flags                          "${initrds[*]}"
+  _msg_info "                Boot Keys:"
+  _display_flags                          "${boot_keys[*]}"
   _msg_info "              Output file:   ${out}"
 }
 
@@ -838,7 +865,7 @@ while \
     c) override_color="y" ;;
     v) override_quiet="n" ;;
     h|?) _set_overrides && \
-	 _usage \
+         _usage \
            0 ;;
     *)
     _msg_error \
