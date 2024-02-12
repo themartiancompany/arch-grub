@@ -3,13 +3,15 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 _globals() {
+  local \
+    _OLDPWD
   set \
     -e \
     -u
   shopt \
     -s \
       extglob
-  
+
   # Control the environment
   umask \
     0022
@@ -26,45 +28,97 @@ _globals() {
       LANGUAGE
   [[ -v SOURCE_DATE_EPOCH ]] || \
     printf \
-      -v SOURCE_DATE_EPOCH \
-      '%(%s)T' -1
+      -v \
+        SOURCE_DATE_EPOCH \
+      '%(%s)T' \
+      -1
   export \
     SOURCE_DATE_EPOCH
   
   # Get script path
+  # shellcheck disable=SC2005
   _path="$( \
+    _OLDPWD="$( \
+      pwd)" && \
     export \
-      _OLDPWD="$(pwd)" && \
-       cd \
-         "$(dirname \
-              "${BASH_SOURCE[0]}")" && \
-       echo "$(pwd)" && \
-       cd "${_OLDPWD}" && \
-       unset _OLDPWD)"
-  unset _OLDPWD
-
-  # Set application name from the script's file name
+      _OLDPWD && \
+    cd \
+      "$( \
+	dirname \
+          "${BASH_SOURCE[0]}")" && \
+    echo \
+      "$(pwd)" && \
+    cd \
+      "${_OLDPWD}" && \
+    unset \
+      _OLDPWD)"
+  unset \
+    _OLDPWD
+  # Set application name
+  # from the script's file name
   app_name="${0##*/}"
 }
+
+_global_variables() {
+  out=""
+  grub_cfg=""
+  embed_cfg=""
+  entry_name=""
+  short_name=""
+  arch_name=""
+  boot_method=""
+  install_dir=""
+  boot_uuids=()
+  boot_keys=()
+  kernels=()
+  initrds=()
+  kernel_sums=()
+  initrd_sums=()
+  work_dir=""
+  quiet=""
+}
+
 
 # Show an INFO message
 # $1: message string
 _msg_info() {
-    local _msg="${1}"
-    [[ "${quiet}" == "y" ]] || \
-      printf '[%s] INFO: %s\n' "${app_name}" "${_msg}"
+  local \
+    _msg=(
+      "$@"
+    ) \
+    _fmt_line=() \
+    _line
+  [[ "${quiet}" == "y" ]] || \
+    for _line \
+      in "${_msg[@]}"; do
+      # _fmt_line+=(
+      #   "$( \
+      #     printf \
+      #       '[%s] INFO: %s\n' \
+      #       "${app_name}" \
+      #       "${_line}")"
+      # )
+      _printf \
+        '[%s] INFO: %s\n' \
+        "${app_name}" \
+        "${_line}"
+    done
+    # _printf \
+    #   "${_fmt_line[*]}"
 }
-
 
 # Show a WARNING message
 # $1: message string
 _msg_warning() {
   local \
-    _msg="${1}"
-  printf \
+    _msg=()
+  _msg=(
+    "${1}"
+  )
+  _printf \
     '[%s] WARNING: %s\n' \
     "${app_name}" \
-    "${_msg}" >&2
+    "${_msg[*]}" >&2
 }
 
 # Show an ERROR message then exit with status
@@ -72,12 +126,14 @@ _msg_warning() {
 # $2: exit code number (with 0 does not exit)
 _msg_error() {
   local \
-    _msg="${1}" \
+    _msg=(
+      "${1}"
+    ) \
     _error=${2}
-  printf \
+  _printf \
     '[%s] ERROR: %s\n' \
     "${app_name}" \
-    "${_msg}" >&2
+    "${_msg[*]}" >&2
   if (( _error > 0 )); then
     exit "${_error}"
   fi
@@ -95,7 +151,36 @@ _set() {
     _type
   printf \
     -v "${_obj}_${_var}" \
+    "%s" \
     "${_value}"
+}
+
+# Returns type ('string', 'list', 'dict') given
+# its name
+# $1: an object
+_get_type() {
+  local \
+    _obj="${1}" \
+    _type="string" \
+    _declare
+  _declare="$( \
+    declare \
+      -p \
+        "${_obj}" 2>&1)"
+  [[ \
+    "${_declare}" == \
+    *"declare:"*"${_obj}"*": not found" ]] && \
+    _type="undefined"
+  [[ \
+    "${_declare}" == \
+    "declare -A "* ]] && \
+    _type="dict"
+  [[ \
+    "${_declare}" == \
+    "typeset -a"* ]] && \
+    _type="array"
+  echo \
+    "${_type}"
 }
 
 # Returns an attribute value for a 
@@ -108,43 +193,27 @@ _get() {
     _var="${2}" \
     _msg \
     _ref \
-    _type
-  _ref="${_obj}_${_var}[@]"
+    _type \
+    _target
+  _target="${_obj}_${_var}"
+  _ref="${_target}[@]"
   _type="$( \
-    declare \
-      -p "${_obj}_${_var}")"
-  [[ "${_type}" == *"declare: "*": not found" ]] && \
+    _get_type \
+      "${_target}")"
+  [[ "${_type}" == "undefined" ]] && \
     _msg=(
       "Attribute '${_var}' is not defined"
       "for object '${_obj}'") && \
     _msg_error \
       "${_msg[*]}" \
       1
-  [[ "${_type}" == "declare -A "* ]] && \
+  [[ "${_type}" == "dict" ]] && \
     echo \
-      "${_image[${_var}]}" && \
+      "${_obj[${_var}]}" && \
     return
   printf \
     "%s\n" \
     "${!_ref}"
-}
-
-_global_variables() {
-  out=""
-  grub_cfg=""
-  embed_cfg=""
-  entry_name=""
-  arch_name=""
-  boot_method=""
-  install_dir=""
-  boot_uuids=()
-  boot_keys=()
-  kernels=()
-  initrds=()
-  kernel_sums=()
-  initrd_sums=()
-  work_dir=""
-  quiet=""
 }
 
 _requirements() {
@@ -241,7 +310,8 @@ _get_modules(){
     search
     search_fs_uuid
     test
-    usb)
+    usb
+  )
   # Encryption specific modules
   _modules+=(
     cryptodisk
@@ -472,7 +542,7 @@ _set_override() {
       "${_var}" \
       "$( \
         _get \
-	  "override_${obj}" \
+	  "override_${_obj}" \
           "${_var}")"
   elif [[ -z \
 	    "$( \
@@ -486,9 +556,9 @@ _set_override() {
   fi
 }
 
-# Re-assign an object variable
-# pointing to a path if an override variable
-# is defined, otherwise it defaults to an input path
+# Re-assign an object variable pointing to
+# a path if an override variable is defined,
+# otherwise it defaults to an input path
 # $1: object
 # $2: variable
 # $3: value (a path)
@@ -516,9 +586,10 @@ _override_path() {
     "${_var}" \
     "$( \
       realpath -- \
-        "$(_get \
-	  "${_obj}" \
-          "${_var}")")"
+        "$( \
+	  _get \
+	    "${_obj}" \
+            "${_var}")")"
 }
 
 # Set defaults and, if present, overrides
@@ -555,11 +626,13 @@ _set_overrides() {
 # Show help usage, with an exit status.
 # $1: exit status number.
 _usage() {
+  local \
+  _usage_text
   IFS='' \
     read \
       -r \
       -d '' \
-      usage_text << \
+      _usage_text << \
         ENDUSAGETEXT || true
 usage: $(_get "app" "name") [options] <out_file>
   options:
@@ -577,14 +650,14 @@ usage: $(_get "app" "name") [options] <out_file>
 			  Default: '$(_get "arch" "name")'
      -b <boot_method>     Boot method (mbr, eltorito, efi).
 			  Default: '$(_get "boot" "method")'
-     -u <boot_uuids>      Add a boot disk UUID, to the resulting
+     -u <boot_uuid>       Add a boot disk UUID, to the resulting
                           bootloader.
      -K <kernel>          Add the path of a kernel inside a boot disk.
      -k <kernel_sum>      SHA256 sums of the kernel.
-     -I <initrds ..>      Paths of the initrds inside the
+     -I <initrd>          Path of the initrd inside the
                           boot disks.
-     -i <initrd_sums>     SHA256 sum of the initrd.
-     -p <boot_keys>       Paths of the encryption keys inside
+     -i <initrd_sum>      SHA256 sum of the initrd.
+     -p <boot_key>        Path of the encryption key inside
                           the boot disks.
                           Set to "" for unencrypted disks.
      -h                   This message.
@@ -595,12 +668,9 @@ usage: $(_get "app" "name") [options] <out_file>
   <out>         Output directory or GRUB binary path.
                 Default: ./BOOT<arch_code>.<platform>
 ENDUSAGETEXT
-  printf \
+  _printf \
     '%s\n' \
-    "$( \
-      _get \
-        "usage" \
-	"text")"
+    "${_usage_text}"
   exit \
     "${1}"
 }
@@ -608,12 +678,14 @@ ENDUSAGETEXT
 # Shows configuration options.
 _show_config() {
   local \
-    build_date
+    _build_date
   TZ=UTC \
     printf \
-      -v build_date \
+      -v _build_date \
       '%(%FT%R%z)T' \
       "${SOURCE_DATE_EPOCH}"
+  _msg_info "Build date:"
+  _msg_info "  ${_build_date}"
   _msg_info "${app_name} configuration settings"
   _msg_info "       Configuration file:   $(_get "grub" "cfg")"
   _msg_info " Plain-text configuration:   ${_embed_cfg:-n}"
@@ -627,6 +699,54 @@ _show_config() {
   _msg_info "                Boot Keys:   ${boot_keys[@]}"
   _msg_info "               Build date:   $(_get "build" "date")"
   _msg_info "              Output file:   ${out}"
+}
+
+# Colorized print
+_printf() {
+  local \
+    _args=()
+    _pygmentize_opts=()
+  _pygmentize_opts=(
+    -g
+    -O style=emacs
+  )
+  _args=(
+      "$@"
+  )
+  # shellcheck disable=SC2059
+  _sho \
+    "$( \
+      printf \
+        "${_args[@]}")" \
+    "${_pygmentize_opts[@]}"
+}
+
+# Colorized Display function
+_sho() {
+  local \
+    _text="${1}" \
+    _pygmentize
+  _pygmentize="$( \
+    command \
+      -v \
+      "pygmentize"{,2} | \
+      head \
+        -n \
+	1)"
+  shift
+  _pygmentize_opts=(
+    "$@"
+  )
+  [[ "${color}" == "y" ]] && \
+  [[ "${_pygmentize}" != "" ]] && \
+    echo \
+      "${_text}" | 
+      "${_pygmentize}" \
+        "${_pygmentize_opts[@]}" && \
+    return
+  printf \
+    "%s\n" \
+    "${_text}"
 }
 
 _globals
@@ -652,8 +772,10 @@ while \
     I) initrds+=("${OPTARG}") ;;
     i) initrds_sums+=("${OPTARG}") ;;
     p) boot_keys+=("${OPTARG}") ;;
+    c) override_color="y" ;;
     v) override_quiet="n" ;;
-    h|?) _usage 0 ;;
+    h|?) _usage \
+           0 ;;
     *)
     _msg_error \
       "Invalid argument '${arg}'" \
@@ -663,12 +785,13 @@ while \
     ;;
   esac
 done
-
 shift \
-  $((OPTIND - 1))
+  $(( \
+    OPTIND - 1 \
+  ))
 
 (( ${#} == 1 )) && \
-  _out="$( \
+  out="$( \
     realpath \
       -q -- \
       "${1}" || \
