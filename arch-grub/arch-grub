@@ -298,7 +298,7 @@ _get_cfg_path() {
       "${_sys_path} not found" && \
     _path="$( \
       realpath \
-        ${_local_path} || \
+        "${_local_path}" || \
 	true)" && \
     [[ ! -e "${_path}" ]] && \
       _msg_warning \
