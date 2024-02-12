@@ -738,6 +738,7 @@ _show_config() {
   local \
     _build_date \
     _boot_uuids=()
+  # shellcheck disable=SC2207
   _boot_uuids=( $( \
     _get \
       "boot" \
@@ -827,7 +828,7 @@ _requirements
 # shellcheck disable=SC2034
 while \
   getopts \
-    'C:p:a:rl:a:b:u:K:k:I:i:e:cvh?' \
+    'C:p:a:rl::b:u:K:k:I:i:e:cvh?' \
     arg; do
   case \
     "${arg}" in
