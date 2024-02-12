@@ -59,6 +59,7 @@ _globals() {
   app_name="${0##*/}"
 }
 
+# shellcheck disable=SC2034
 _global_variables() {
   out=""
   grub_cfg=""
@@ -226,7 +227,8 @@ _check_cmd(){
     1
   _pkg="$@"
   _cmd_var="$( \
-    echo \
+    printf \
+      "%s" \
       "${_cmd}" | \
       sed \
         "s/-/_/g")"
@@ -236,6 +238,7 @@ _check_cmd(){
     printf \
       -v \
         "_${_cmd_var}" \
+      "%s" \
       "$( \
         command \
           -v \
@@ -243,7 +246,9 @@ _check_cmd(){
     _flag=true
   [ -e "${_path}/${_cmd}" ] && \
     printf \
-      -v "_${_cmd_var}" \
+      -v \
+        "_${_cmd_var}" \
+      "%s" \
       "${_path}/${_cmd}" && \
     _flag=true
   if [[ "${_flag}" != "true" ]]; then
@@ -700,9 +705,9 @@ _show_config() {
   _msg_info "               Short name:   $(_get "short" "name")"
   _msg_info "              Boot Method:   $(_get "boot" "method")"
   _msg_info "               Boot UUIDS:   $(_get "boot" "uuids")"
-  _msg_info "                  Kernels:   ${kernels[@]}"
-  _msg_info "                  Initrds:   ${initrds[@]}"
-  _msg_info "                Boot Keys:   ${boot_keys[@]}"
+  _msg_info "                  Kernels:   ${kernels[*]}"
+  _msg_info "                  Initrds:   ${initrds[*]}"
+  _msg_info "                Boot Keys:   ${boot_keys[*]}"
   _msg_info "               Build date:   $(_get "build" "date")"
   _msg_info "              Output file:   ${out}"
 }
