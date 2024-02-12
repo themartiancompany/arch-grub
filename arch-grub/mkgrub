@@ -788,7 +788,8 @@ while \
     p) boot_keys+=("${OPTARG}") ;;
     c) override_color="y" ;;
     v) override_quiet="n" ;;
-    h|?) _usage \
+    h|?) _set_overrides && \
+	 _usage \
            0 ;;
     *)
     _msg_error \
