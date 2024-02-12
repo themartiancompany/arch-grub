@@ -63,7 +63,8 @@ _globals() {
 _global_variables() {
   out=""
   grub_cfg=""
-  embed_cfg=""
+  plain_text=""
+  cfg_checksum=""
   entry_name=""
   short_name=""
   arch_name=""
@@ -538,6 +539,7 @@ _make_grub() {
 _build() {
   [[ "${quiet}" == "y" ]] || \
     _show_config
+  _msg_info "${out}"
   _make_grub \
     "$( \
       _get \
@@ -627,8 +629,17 @@ _override_path() {
 _set_overrides() {
   local \
     _embed_cfg=""
-  [[ -v \
-       override_embed_cfg ]] && \
+  _set_override \
+    "plain" \
+    "text" \
+    "false"
+  _set_override \
+    "cfg" \
+    "checksum" \
+    "true"
+  [[ "$(_get \
+          "plain" \
+	  "text")" == true ]] && \
     _embed_cfg="-embed" 
   _override_path \
     "grub" \
@@ -674,15 +685,18 @@ usage: $(_get "app" "name") [options] <out_file>
      -C <grub_cfg>        Whether to use a specific configuration
                           file to embed in GRUB.
 		          Default: '$(_get "grub" "cfg")'
-     -e                   Whether to load a plain text
-                          GRUB configuration from the GRUB
-                          binary directory at runtime.
-			  Default: '${embed_cfg}'.
+     -p                   Whether actual configuration file
+                          is loaded from a plain-text file 
+                          in the GRUB binary directory at runtime.
+			  Default: '$(_get "plain" "text")'.
+     -a <arch_name>       Architecture
+			  Default: '$(_get "arch" "name")'
+     -r                   Disable configuration file integrity
+                          check.
+                          Default: '$(_get "cfg" "checksum")'
      -L <entry_name>      Sets an alternative entry name
 			  Default: '$(_get "entry" "name")'
      -l <short_name>      Short entry name.
-     -a <arch_name>       Architecture
-			  Default: '$(_get "arch" "name")'
      -b <boot_method>     Boot method (mbr, eltorito, efi).
 			  Default: '$(_get "boot" "method")'
      -u <boot_uuid>       Add a boot disk UUID, to the resulting
@@ -692,7 +706,7 @@ usage: $(_get "app" "name") [options] <out_file>
      -I <initrd>          Path of the initrd inside the
                           boot disks.
      -i <initrd_sum>      SHA256 sum of the initrd.
-     -p <boot_key>        Path of the encryption key inside
+     -e <boot_key>        Path of the encryption key inside
                           the boot disks.
                           Set to "" for unencrypted disks.
      -h                   This message.
@@ -724,7 +738,7 @@ _show_config() {
   _msg_info "  ${_build_date}"
   _msg_info "${app_name} configuration settings"
   _msg_info "       Configuration file:   $(_get "grub" "cfg")"
-  _msg_info " Plain-text configuration:   ${_embed_cfg:-n}"
+  _msg_info " Plain-text configuration:   $(_get "plain" "text")"
   _msg_info "             Architecture:   $(_get "arch" "name")"
   _msg_info "               Entry name:   $(_get "entry" "name")"
   _msg_info "               Short name:   $(_get "short" "name")"
@@ -733,7 +747,6 @@ _show_config() {
   _msg_info "                  Kernels:   ${kernels[*]}"
   _msg_info "                  Initrds:   ${initrds[*]}"
   _msg_info "                Boot Keys:   ${boot_keys[*]}"
-  _msg_info "               Build date:   $(_get "build" "date")"
   _msg_info "              Output file:   ${out}"
 }
 
@@ -793,22 +806,35 @@ _requirements
 # shellcheck disable=SC2034
 while \
   getopts \
-    'C:e:L:l:a:b:u:K:k:I:i:p:cvh?' \
+    'C:p:a:rl:a:b:u:K:k:I:i:e:cvh?' \
     arg; do
   case \
     "${arg}" in
     C) override_grub_cfg="${OPTARG}" ;;
-    e) override_embed_cfg="y" ;;
+    p) override_plain_text="true" ;;
+    a) override_arch_name="${OPTARG}" ;;
+    r) override_cfg_checksum="false" ;;
     L) override_entry_name="${OPTARG}" ;;
     l) override_short_name="${OPTARG}" ;;
-    a) override_arch_name="${OPTARG}" ;;
     b) override_boot_method="${OPTARG}" ;;
-    u) boot_uuids+=("${OPTARG}") ;;
-    K) kernels+=("${OPTARG}") ;;
-    k) kernel_sums+=("${OPTARG}") ;;
-    I) initrds+=("${OPTARG}") ;;
-    i) initrds_sums+=("${OPTARG}") ;;
-    p) boot_keys+=("${OPTARG}") ;;
+    u) boot_uuids+=(
+         "${OPTARG}"
+       ) ;;
+    K) kernels+=(
+	 "${OPTARG}"
+       ) ;;
+    k) kernel_sums+=(
+	 "${OPTARG}"
+       ) ;;
+    I) initrds+=(
+	 "${OPTARG}"
+       ) ;;
+    i) initrds_sums+=(
+	 "${OPTARG}"
+       ) ;;
+    e) boot_keys+=(
+	 "${OPTARG}"
+       ) ;;
     c) override_color="y" ;;
     v) override_quiet="n" ;;
     h|?) _set_overrides && \
@@ -827,11 +853,11 @@ shift \
   $(( \
     OPTIND - 1 \
   ))
-(( ${#} == 1 )) && \
-  out="$( \
-    realpath \
-      -q -- \
-      "${1}" || \
-      true)"
+(( ${#} == 0 )) && \
+  out="$(pwd)"
+out="$( \
+  realpath \
+    -q -- \
+    "${out}")"
 _set_overrides
 _build
