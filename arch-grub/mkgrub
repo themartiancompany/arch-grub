@@ -611,6 +611,84 @@ _override_path() {
             "${_var}")")"
 }
 
+_make_entry() {
+  local \
+    _entry_name="${1}" \
+    _short_entry="${2}" \
+    _arch="${2}" \
+    _entry_line=() \
+    _entry_opts=()
+    _decrypt_loop=()
+  _entry_line=(
+    menuentry
+      "\"${_short_entry} (${_arch})\""
+    --class
+      arch
+    --class
+      gnu-linux
+    --class
+      gnu
+    --class
+      os
+    --id
+      "\'${_short_name}\'"
+  )
+  _entry_opts=(
+    set
+      gfxpayload=keep;
+  )
+  _decrypt_cmd=(
+    cryptomount 
+      '"${_uuid}";'
+    echo
+      '"UUID: ${_uuid}";'
+    "if [ test -e (crypto0) ]; then"
+      'set disk="(crypto0)"'
+    "else"
+       echo 
+         'Cant mount ${_uuid} partition.'
+   )
+
+  _decrypt_loop=(
+    _retries=0
+    while [ ]
+    )
+  _device_selection_loop=(
+    for _uuid in %BOOT_UUIDS%; do
+	"${_decrypt_cmd[*}"
+    done)
+    %DEVICE_SELECT_CMDLINE%
+    if [ test -e (crypto0) ]; then
+        set disk="(crypto0)"
+    else
+        echo "Can't mount dongle encrypted boot partition."
+        for _disk in %uuids%
+        %RECOVERY_SELECT_CMDLINE%
+        if [ test -e (crypto0) ]; then
+            set disk="(crypto0)"
+        else
+            echo "Can't mount recovery partition."
+            echo "Be sure the dongle is on a read-only device."
+            set disk=
+            search --no-floppy --set=root --fs-uuid %BOOTABLE_UUID%
+            if [ "${root}" == "memdisk" ]; then
+                echo "Can't mount dongle."
+                echo "Be sure boot disk is read-only."
+                search --no-floppy --set=root --fs-uuid %FALLBACK_UUID%
+                if [ "${root}" != "memdisk" ] ; then
+                    echo "If it says to press any key, don't bother to press any key."
+                fi
+            fi
+ 
+        fi
+    fi
+    linux "${disk}"%INSTALL_DIR%/boot/%ARCH%/vmlinuz-linux %KERNEL_PARAMS%
+    initrd "${disk}"%INSTALL_DIR%/boot/%ARCH%/initramfs-linux.img
+}
+
+
+}
+
 # Set defaults and, if present, overrides
 # from arch-grub command line option parameters
 _set_overrides() {
