@@ -60,6 +60,8 @@ _globals() {
 
 # shellcheck disable=SC2034
 _global_variables() {
+  local \
+    _field
   out=""
   grub_cfg=""
   cfg_checksum=""
@@ -68,14 +70,22 @@ _global_variables() {
   arch_name=""
   boot_method=""
   boot_uuids=()
-  declare \
-    -A \
-    encryption \
-    key \
-    kernel \
-    initrd \
-    kernel_sums \
+  encrypted_uuids=()
+  fields=(
+    encryption
+    key
+    kernel
+    initrd
+    kernel_sums
     initrd_sums
+    name
+    ssd
+  )
+  for _field in "${fields[@]}"; do
+    declare \
+      -A \
+      "${_field}"
+  done
   work_dir=""
   color=""
   quiet=""
@@ -428,7 +438,7 @@ _make_entry() {
     'set'
       'gfxpayload=keep;'
   )
-  _decrypt_loop=()
+  _decrypt_loop=(
     # "${_decrypt_cmd[@]}"
   )
   _encrypted_devices_loop=(
@@ -580,7 +590,8 @@ _display_flags() {
     _flag
   for _flag \
     in "${_flags[@]}"; do
-  _msg_info "                              ${_flag}"
+  _msg_info \
+    "                              ${_flag}"
   done
 }
 
@@ -593,7 +604,22 @@ _display_devices() {
     _uuid
   for _uuid \
     in "${_uuids[@]}"; do
-  _msg_info "                            ${_uuid}"
+    echo \
+      "$( \
+        _get \
+          "encryption" \
+	  "${_uuid}")"
+  # declare \
+  #   -A \
+  #   encryption \
+  #   key \
+  #   kernel \
+  #   initrd \
+  #   kernel_sums \
+  #   initrd_sums \ 
+  #   name \
+  #   ssd
+  # _msg_info "                            ${_uuid}"
   done
 }
 
@@ -622,6 +648,8 @@ _show_config() {
   _msg_info "             Architecture:   $(_get "arch" "name")"
   _msg_info "               Entry name:   $(_get "entry" "name")"
   _msg_info "               Short name:   $(_get "short" "name")"
+  _msg_info "                  Devices:"
+  _msg_info "               Boot UUIDS:"
   _msg_info "               Boot UUIDS:"
   _display_flags                          "${_boot_uuids[*]}"
   _msg_info "   Unencrypted boot UUIDS:"
@@ -699,12 +727,14 @@ while \
     r) override_cfg_checksum="false" ;;
     L) override_entry_name="${OPTARG}" ;;
     l) override_short_name="${OPTARG}" ;;
-    U) __uuid="${OPTARG} && \
+    U) __uuid="${OPTARG}" && \
        encrypted_uuids+=(
-         "${__uid}";;
-    U) __uuid="${OPTARG} && \
+         "${__uuid}"
+       );;
+    u) __uuid="${OPTARG}" && \
        boot_uuids+=(
-         "${__uuid}";;
+	 "${__uuid}"
+       );;
     K) kernel[${__uuid}]="${OPTARG}";;
     k) kernel_sum[${__uuid}]="${OPTARG}";;
     I) initrd[${__uid}]="${OPTARG}";;
@@ -738,3 +768,5 @@ _arch="${3}"
 #   "${_entry_name}" \
 #   "${_short_name}" \
 #   "${_arch}"
+
+# vim:set sw=2 sts=-1 et:
