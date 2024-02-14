@@ -62,7 +62,7 @@ _globals() {
 _global_variables() {
   local \
     _field
-  out=""
+  out_file=""
   grub_cfg=""
   cfg_checksum=""
   entry_name=""
@@ -76,17 +76,17 @@ _global_variables() {
     key
     kernel
     initrd
-    kernel_sums
-    initrd_sums
+    ksum
+    isum
     name
     ssd
   )
   for _field in "${fields[@]}"; do
     declare \
+      -g \
       -A \
       "${_field}"
   done
-  work_dir=""
   color=""
   quiet=""
 }
@@ -159,9 +159,21 @@ _set() {
   local \
     _obj="${1}" \
     _var="${2}" \
-    _value="${3}"
+    _value="${3}" \
+    _target \
+    _ass_target \
+    _ass_type
+  _target="${_obj}_${_var}"
+  _ass_target="${_obj}[${_var}]"
+  _ass_type="$( \
+    _get_type \
+      "${_obj}")"
+  [[ "${_ass_type}" == "dict" ]] && \
+    _target="${_ass_target}"
+  _msg_info \
+    "setting '${_target}' to '${_value}'"
   printf \
-    -v "${_obj}_${_var}" \
+    -v "${_target}" \
     "%s" \
     "${_value}"
 }
@@ -211,6 +223,7 @@ _get() {
   _ass_target="${_obj}"
   _target="${_obj}_${_var}"
   _ref="${_target}[@]"
+  _ass_ref="${_obj}[${_var}]"
   _type="$( \
     _get_type \
       "${_target}")"
@@ -218,6 +231,7 @@ _get() {
     _get_type \
       "${_ass_target}")"
   [[ "${_type}" == "undefined" ]] && \
+  [[ "${_ass_type}" != "dict" ]] && \
     _msg=(
       "Attribute '${_var}' is not defined"
       "for object '${_obj}'") && \
@@ -225,9 +239,7 @@ _get() {
       "${_msg[*]}" \
       1
   [[ "${_ass_type}" == "dict" ]] && \
-    echo \
-      "${_obj[${_var}]}" && \
-    return
+    _ref="${_ass_ref}"
   printf \
     "%s\n" \
     "${!_ref}"
@@ -485,24 +497,10 @@ _make_entry() {
 # Set defaults and, if present, overrides
 # from arch-grub command line option parameters
 _set_overrides() {
-  local \
-    _embed_cfg=""
   _set_override \
-    "plain" \
-    "text" \
-    "false"
-  _set_override \
-    "cfg" \
-    "checksum" \
-    "true"
-  [[ "$(_get \
-          "plain" \
-	  "text")" == true ]] && \
-    _embed_cfg="-embed"
-  _override_path \
-    "grub" \
-    "cfg" \
-    "$(_get_cfg_path)/grub${_embed_cfg}.cfg"
+    "out" \
+    "file" \
+    ""
   _set_override \
     "entry" \
     "name" \
@@ -515,10 +513,22 @@ _set_overrides() {
     "arch" \
     "name" \
     "x86_64"
-  _set_override \
-    "boot" \
-    "method" \
-    "efi"
+  [[ "${boot_uuids[@]}" == "" ]] && \
+    boot_uuids+=(
+      'memdisk'
+    )
+  [[ "${encrypted_uuids[@]}" == "" ]] && \
+    encrypted_uuids+=(
+      'memdisk'
+    )
+  for _uuid \
+    in "${encrypted_uuids[@]}"; do
+    _msg_info \
+      "setting 'boot.key' as key for '${_uuid}'"
+    _set "encryption" \
+         "${_uuid}" \
+         "boot.key"
+  done
   if [[ -v override_quiet ]]; then
     quiet="${override_quiet}"
   elif [[ -z "${quiet}" ]]; then
@@ -529,7 +539,6 @@ _set_overrides() {
   elif [[ -z "${color}" ]]; then
     color="n"
   fi
-
 }
 
 # Show help usage, with an exit status.
@@ -543,37 +552,35 @@ _usage() {
       -d '' \
       _usage_text << \
         ENDUSAGETEXT || true
-usage: $(_get "app" "name") [options] <out_file>
+usage: $(_get "app" "name")
+         [options]
+         -U <fssuid> (-u <fsuuid>)
+           [boot disk options]
   options:
      -a <arch_name>       Architecture
 			  Default: '$(_get "arch" "name")'
-     -r                   Disable configuration file integrity
-                          check.
-                          Default: '$(_get "cfg" "checksum")'
      -L <entry_name>      Sets an alternative entry name
 			  Default: '$(_get "entry" "name")'
      -l <short_name>      Short entry name.
 			  Default: '$(_get "short" "name")'
-     -U <fsuuid>          add an encrypted disk UUID to the
-                          resulting configuration file.
-     -u <fsuuid>          Add a boot disk UUID, to the resulting
-                          bootloader.
-     -K <kernel>          Add the path of a kernel inside a boot disk.
-     -k <kernel_sum>      SHA256 sums of the kernel.
-     -I <initrd>          Path of the initrd inside the
-                          boot disks.
-     -i <initrd_sum>      SHA256 sum of the initrd.
-     -e <boot_key>        Path of the encryption key inside
-                          the boot disk.
-                          Set to "" for unencrypted disks.
+     -U <fsuuid>          Add an UUID for an encrypted boot disk.
+     -u <fsuuid>          Add an UUID for an unencrypted boot disk.
+     -o <out>             Output configuration file.
+                          Default: print to console
      -h                   This message.
      -c                   Enable color output
      -v                   Enable verbose output
-     -w <work_dir>        Set the working directory (can't be a bind mount).
-		          Default: '$(_get "work" "dir")}'
-
-  <out>         Output directory or GRUB binary path.
-                Default: ./BOOT<arch_code>.<platform>
+  boot disk options:
+     -s                   Whether boot disk is on a
+                          solid state drive.
+     -n <name>            Boot disk nickname.
+     -K <kernel>          Kernel path inside the boot disk.
+     -k <ksum>            SHA256 sum of the kernel.
+     -I <initrd>          Path of the initrd inside the
+                          boot disks.
+     -i <isum>            SHA256 sum of the initrd.
+     -e <key>             Path of the encryption key inside
+                          the boot disk.
 ENDUSAGETEXT
   _printf \
     '%s\n' \
@@ -595,7 +602,6 @@ _display_flags() {
   done
 }
 
-
 _display_devices() {
   local \
     _uuids=(
@@ -604,11 +610,25 @@ _display_devices() {
     _uuid
   for _uuid \
     in "${_uuids[@]}"; do
-    echo \
-      "$( \
-        _get \
-          "encryption" \
-	  "${_uuid}")"
+    _key="$( \
+      _get \
+        "encryption" \
+        "${_uuid}")"
+    _name="$( \
+      _get \
+        "name" \
+        "${_uuid}")"
+    _msg_info \
+      "                      Name: ${_uuid}"
+    _msg_info \
+      "                      UUID: ${_uuid}"
+    _msg_info \
+      "                       Key: ${_key}"
+    _msg_info \
+      "                    Kernel: ${_kernel}"
+    _msg_info \
+      "                    Initrd: ${_initrd}"
+
   # declare \
   #   -A \
   #   encryption \
@@ -649,9 +669,8 @@ _show_config() {
   _msg_info "               Entry name:   $(_get "entry" "name")"
   _msg_info "               Short name:   $(_get "short" "name")"
   _msg_info "                  Devices:"
-  _msg_info "               Boot UUIDS:"
-  _msg_info "               Boot UUIDS:"
-  _display_flags                          "${_boot_uuids[*]}"
+  _display_devices                        "${_encrypted_uuids[@]}" \
+                                          "${boot_uuids[@]}"
   _msg_info "   Unencrypted boot UUIDS:"
   _display_flags                          "${encrypted_uuids[*]}"
   _msg_info "                  Kernels:"
@@ -660,7 +679,7 @@ _show_config() {
   _display_flags                          "${initrds[*]}"
   _msg_info "                Boot Keys:"
   _display_flags                          "${boot_keys[*]}"
-  _msg_info "              Output file:   ${out}"
+  _msg_info "              Output file:   $(_get "out" "file")"
 }
 
 # Colorized print
@@ -719,28 +738,28 @@ _requirements
 # shellcheck disable=SC2034
 while \
   getopts \
-    'C:p:a:rL:l:U:u:K:k:I:i:n:e:cvh?' \
+    'a:L:l:U:u:K:k:I:i:n:e:o:cvh?' \
     arg; do
   case \
     "${arg}" in
     a) override_arch_name="${OPTARG}" ;;
-    r) override_cfg_checksum="false" ;;
     L) override_entry_name="${OPTARG}" ;;
     l) override_short_name="${OPTARG}" ;;
-    U) __uuid="${OPTARG}" && \
+    U) _uuid="${OPTARG}" && \
        encrypted_uuids+=(
-         "${__uuid}"
+         "${_uuid}"
        );;
-    u) __uuid="${OPTARG}" && \
+    u) _uuid="${OPTARG}" && \
        boot_uuids+=(
-	 "${__uuid}"
+	 "${_uuid}"
        );;
-    K) kernel[${__uuid}]="${OPTARG}";;
-    k) kernel_sum[${__uuid}]="${OPTARG}";;
-    I) initrd[${__uid}]="${OPTARG}";;
-    i) initrd_sum[${__uid}]="${OPTARG}";;
-    n) name[${__uuid}]="${OPTARG}";;  
-    e) boot_key[${__uid}]="${OPTARG}";;
+    K) kernel[${_uuid}]="${OPTARG}";;
+    k) ksum[${_uuid}]="${OPTARG}";;
+    I) initrd[${_uuid}]="${OPTARG}";;
+    i) isum[${_uuid}]="${OPTARG}";;
+    n) name[${_uuid}]="${OPTARG}";;  
+    e) key[${_uuid}]="${OPTARG}";;
+    o) override_out_file="${OPTARG}";;
     c) override_color="y" ;;
     v) override_quiet="n" ;;
     h|?) _set_overrides && \
@@ -759,11 +778,19 @@ shift \
   $(( \
     OPTIND - 1 \
   ))
+(( ${#} == 0 )) && \
+  out=""
+(( ${#} != 0 )) && \
+  out="$( \
+    realpath \
+      -q -- \
+      "${1}")"
+# _entry_name="${1}"
+# _short_name="${2}"
+# _arch="${3}"
 
-_entry_name="${1}"
-_short_name="${2}"
-_arch="${3}"
-
+_set_overrides
+_show_config
 # _make_entry \
 #   "${_entry_name}" \
 #   "${_short_name}" \

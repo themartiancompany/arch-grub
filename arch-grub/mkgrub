@@ -75,7 +75,6 @@ _global_variables() {
   initrds=()
   kernel_sums=()
   initrd_sums=()
-  work_dir=""
   color=""
   quiet=""
 }
@@ -769,22 +768,29 @@ usage: $(_get "app" "name") [options] <out_file>
      -C <grub_cfg>        Whether to use a specific configuration
                           file to embed in GRUB.
 		          Default: '$(_get "grub" "cfg")'
+     -g                   Pass to auto-generate a configuration
+                          file using mkgrubcfg.
+                          Default: '$(_get "auto" "cfg")'
      -p                   Whether a plain text configuration file
                           in the GRUB binary directory is used.
 			  Default: '$(_get "plain" "text")'.
+     -b <boot_method>     Boot method (mbr, eltorito, efi).
+			  Default: '$(_get "boot" "method")'
      -a <arch_name>       Architecture
 			  Default: '$(_get "arch" "name")'
      -r                   Disable configuration file integrity
                           check.
                           Default: '$(_get "cfg" "checksum")'
+     -h                   This message.
+     -c                   Enable color output
+     -v                   Enable verbose output
+  mkgrubcfg options:
      -L <entry_name>      Sets an alternative entry name
 			  Default: '$(_get "entry" "name")'
      -l <short_name>      Short entry name.
 			  Default: '$(_get "short" "name")'
-     -b <boot_method>     Boot method (mbr, eltorito, efi).
-			  Default: '$(_get "boot" "method")'
-     -u <boot_uuid>       Add a boot disk UUID, to the resulting
-                          bootloader.
+     -U <fsuuid>          Add an UUID for an encrypted boot disk.
+     -u <fsuuid>          Add an UUID for an unencrypted boot disk.
      -K <kernel>          Add the path of a kernel inside a boot disk.
      -k <kernel_sum>      SHA256 sums of the kernel.
      -I <initrd>          Path of the initrd inside the
@@ -793,11 +799,6 @@ usage: $(_get "app" "name") [options] <out_file>
      -e <boot_key>        Path of the encryption key inside
                           the boot disk.
                           Set to "" for unencrypted disks.
-     -h                   This message.
-     -c                   Enable color output
-     -v                   Enable verbose output
-     -w <work_dir>        Set the working directory (can't be a bind mount).
-		          Default: '$(_get "work" "dir")}'
 
   <out>         Output directory or GRUB binary path.
                 Default: ./BOOT<arch_code>.<platform>
@@ -916,35 +917,16 @@ _requirements
 # shellcheck disable=SC2034
 while \
   getopts \
-    'C:p:a:rL:l::b:u:K:k:I:i:e:cvh?' \
+    'C:gpa:b:rcvh?' \
     arg; do
   case \
     "${arg}" in
     C) override_grub_cfg="${OPTARG}" ;;
+    g) override_auto_conf="true" ;;
     p) override_plain_text="true" ;;
-    a) override_arch_name="${OPTARG}" ;;
-    r) override_cfg_checksum="false" ;;
-    L) override_entry_name="${OPTARG}" ;;
-    l) override_short_name="${OPTARG}" ;;
     b) override_boot_method="${OPTARG}" ;;
-    u) boot_uuids+=(
-         "${OPTARG}"
-       ) ;;
-    K) kernels+=(
-	 "${OPTARG}"
-       ) ;;
-    k) kernel_sums+=(
-	 "${OPTARG}"
-       ) ;;
-    I) initrds+=(
-	 "${OPTARG}"
-       ) ;;
-    i) initrds_sums+=(
-	 "${OPTARG}"
-       ) ;;
-    e) boot_keys+=(
-	 "${OPTARG}"
-       ) ;;
+    r) override_cfg_checksum="false" ;;
+    a) override_arch_name="${OPTARG}" ;;
     c) override_color="y" ;;
     v) override_quiet="n" ;;
     h|?) _set_overrides && \
@@ -965,6 +947,8 @@ shift \
   ))
 (( ${#} == 0 )) && \
   out="$(pwd)"
+(( ${#} != 0 )) && \
+  out="${1}"
 out="$( \
   realpath \
     -q -- \
@@ -981,4 +965,9 @@ _set_overrides
         _get \
 	  "boot" \
 	  "method")")"
+shift \
+  1
+mkgrubcfg_opts=(
+  "$@"
+)
 _build
