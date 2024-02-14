@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+
+_make_entry() {
+  local \
+    _entry_name="${1}" \
+    _short_entry="${2}" \
+    _arch="${3}" \
+    _entry_line=() \
+    _entry_header=() \
+    _decrypt_cmd=() \
+    _decrypt_loop=() \
+    _encrypted_devices_loop=() \
+    _unencrypted_devices_loop=()
+  _entry_line=(
+    menuentry
+      "\"${_short_entry} (${_arch})\""
+    --class
+      arch
+    --class
+      gnu-linux
+    --class
+      gnu
+    --class
+      os
+    --id
+      "'${_short_name}'"
+    {
+  )
+  _entry_header=(
+    'set'
+      'gfxpayload=keep;'
+  )
+  _decrypt_cmd=(
+    cryptomount 
+       '"${_uuid}";'
+    echo
+      '"UUID: ${_uuid}";'
+    "if [ test -e (crypto0) ]; then"
+      'set'
+        'disk="(crypto0)";'
+    "else"
+       'echo' 
+         '"Cant mount ${_uuid} partition.";'
+    "fi"
+   )
+  _decrypt_loop=(
+    '_retries=0;'
+    'while (( "${retries}" < 2 )); do'
+      "${_decrypt_cmd[@]}"
+      'if [ "${disk}" == "" ]; then'
+        '_retries+=1;'
+      'fi'
+      'if [ "${disk}" != "" ]; then'
+        '_retries+=1;'
+      'fi'
+    "done"
+  )
+  _encrypted_devices_loop=(
+    'for _uuid'
+      'in "${_boot_uuids[@]}"; do'
+      "${_decrypt_loop[@]}"
+    'done'
+  )
+  _unencrypted_devices_loop=(
+    'for _uuid'
+      'in "${_boot_uuids[@]}"; do'
+      'search'
+        '--no-floppy'
+	'--set=root'
+	'--fs-uuid'
+	  '"${_uuid}";'
+    'done'
+  )
+  _linux_line=(
+    'linux'
+      '"${disk}"'"${_kernel}"
+         "${_kernel_params}"
+  )
+  _initrd_line=(
+    'initrd'
+      '"${disk}"'"${_kernel}"
+  )
+  printf \
+    "%s\n  %s\n  %s\n  %s" \
+    "${_entry_line[*]}" \
+    "${_entry_header[*]}" \
+    "${_encrypted_devices_loop[*]}" \
+    "${_unencrypted_devices_loop[*]}"
+}
+
+_entry_name="${1}"
+_short_name="${2}"
+_arch="${3}"
+
+_make_entry \
+  "${_entry_name}" \
+  "${_short_name}" \
+  "${_arch}"
