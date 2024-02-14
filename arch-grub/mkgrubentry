@@ -1,5 +1,41 @@
 #!/usr/bin/env bash
 
+_decrypt() {
+  local \
+    _uuid="${1}" \
+    _label="${2}" \
+    _retries="${3}" \
+    _decrypt_cmd=()
+  _decrypt_cmd=(
+    'if [ test -e "(crypto0)" ]; then'
+      'set'
+        'disk="(crypto0)";'
+    "else"
+      "echo"
+        "'Enter passphrase for device';"
+      "echo"
+        "'${_label} (${_uuid})';"
+      'cryptomount'
+         "${_uuid};"
+    'fi;'
+    'if [ test -e "(crypto0)" ]; then'
+      'set'
+        'disk="(crypto0)";'
+      'echo'
+        "'Device';"
+      'echo' 
+        "\"${_label} (${_uuid})\";"
+      'echo'
+        "'correctly mounted.';"
+    "else"
+       'echo' 
+         "'Device not found or incorrect passphrase/key.';"
+    "fi;"
+  )
+  echo \
+    "${_decrypt_cmd[*]}"
+}
+
 _make_entry() {
   local \
     _entry_name="${1}" \
@@ -10,7 +46,9 @@ _make_entry() {
     _decrypt_cmd=() \
     _decrypt_loop=() \
     _encrypted_devices_loop=() \
-    _unencrypted_devices_loop=()
+    _unencrypted_devices_loop=() \
+    _tmp_cfg
+  _tmp_cfg="$(mktemp)"
   _entry_line=(
     menuentry
       "\"${_short_entry} (${_arch})\""
@@ -30,36 +68,14 @@ _make_entry() {
     'set'
       'gfxpayload=keep;'
   )
-  _decrypt_cmd=(
-    cryptomount 
-       '"${_uuid}";'
-    echo
-      '"UUID: ${_uuid}";'
-    "if [ test -e (crypto0) ]; then"
-      'set'
-        'disk="(crypto0)";'
-    "else"
-       'echo' 
-         '"Cant mount ${_uuid} partition.";'
-    "fi"
-   )
-  _decrypt_loop=(
-    '_retries=0;'
-    'while (( "${retries}" < 2 )); do'
-      "${_decrypt_cmd[@]}"
-      'if [ "${disk}" == "" ]; then'
-        '_retries+=1;'
-      'fi'
-      'if [ "${disk}" != "" ]; then'
-        '_retries+=1;'
-      'fi'
-    "done"
+  _decrypt_loop=()
+    # "${_decrypt_cmd[@]}"
   )
   _encrypted_devices_loop=(
     'for _uuid'
       'in "${_boot_uuids[@]}"; do'
       "${_decrypt_loop[@]}"
-    'done'
+    'done;'
   )
   _unencrypted_devices_loop=(
     'for _uuid'
@@ -69,23 +85,31 @@ _make_entry() {
 	'--set=root'
 	'--fs-uuid'
 	  '"${_uuid}";'
-    'done'
+    'done;'
   )
   _linux_line=(
     'linux'
       '"${disk}"'"${_kernel}"
-         "${_kernel_params}"
+         "${_kernel_params};"
   )
   _initrd_line=(
     'initrd'
-      '"${disk}"'"${_kernel}"
+      '"${disk}"'"${_kernel};"
   )
   printf \
-    "%s\n  %s\n  %s\n  %s" \
-    "${_entry_line[*]}" \
+    "%s\n  %s\n  %s" \
     "${_entry_header[*]}" \
     "${_encrypted_devices_loop[*]}" \
-    "${_unencrypted_devices_loop[*]}"
+    "${_unencrypted_devices_loop[*]}" > \
+    "${_tmp_cfg}"
+  #cat \
+  #  "${_tmp_cfg}"
+  shfmt \
+    -l \
+    -w "${_tmp_cfg}"
+  cat \
+    "${_tmp_cfg}"
+ 
 }
 
 _entry_name="${1}"
