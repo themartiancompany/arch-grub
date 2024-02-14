@@ -1,11 +1,362 @@
 #!/usr/bin/env bash
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+_globals() {
+  local \
+    _OLDPWD
+  set \
+    -e \
+    -u
+  shopt \
+    -s \
+      extglob
+  # Control the environment
+  umask \
+    0022
+  export \
+    LC_ALL="C.UTF-8"
+  # LC_ALL=C.UTF-8, unlike LC_ALL=C,
+  # does not override LANGUAGE.
+  # See 
+  # https://sourceware.org/bugzilla/show_bug.cgi?id=16621
+  # and 
+  # https://savannah.gnu.org/bugs/?62815
+  [[ -v LANGUAGE ]] && \
+    unset \
+      LANGUAGE
+  [[ -v SOURCE_DATE_EPOCH ]] || \
+    printf \
+      -v \
+        SOURCE_DATE_EPOCH \
+      '%(%s)T' \
+      -1
+  export \
+    SOURCE_DATE_EPOCH
+  
+  # Get script path
+  # shellcheck disable=SC2005
+  _path="$( \
+    _OLDPWD="$( \
+      pwd)" && \
+    export \
+      _OLDPWD && \
+    cd \
+      "$( \
+	dirname \
+          "${BASH_SOURCE[0]}")" && \
+    echo \
+      "$(pwd)" && \
+    cd \
+      "${_OLDPWD}" && \
+    unset \
+      _OLDPWD)"
+  unset \
+    _OLDPWD
+  # Set application name
+  # from the script's file name
+  app_name="${0##*/}"
+}
+
+# shellcheck disable=SC2034
+_global_variables() {
+  out=""
+  grub_cfg=""
+  cfg_checksum=""
+  entry_name=""
+  short_name=""
+  arch_name=""
+  boot_method=""
+  boot_uuids=()
+  declare \
+    -A \
+    encryption \
+    key \
+    kernel \
+    initrd \
+    kernel_sums \
+    initrd_sums
+  work_dir=""
+  color=""
+  quiet=""
+}
+
+# Show an INFO message
+# $1: message string
+_msg_info() {
+  local \
+    _msg=(
+      "$@"
+    ) \
+    _fmt_line=() \
+    _line
+  [[ "${quiet}" == "y" ]] || \
+    for _line \
+      in "${_msg[@]}"; do
+      # _fmt_line+=(
+      #   "$( \
+      #     printf \
+      #       '[%s] INFO: %s\n' \
+      #       "${app_name}" \
+      #       "${_line}")"
+      # )
+      _printf \
+        '[%s] INFO: %s\n' \
+        "${app_name}" \
+        "${_line}"
+    done
+    # _printf \
+    #   "${_fmt_line[*]}"
+}
+
+# Show a WARNING message
+# $1: message string
+_msg_warning() {
+  local \
+    _msg=()
+  _msg=(
+    "${1}"
+  )
+  _printf \
+    '[%s] WARNING: %s\n' \
+    "${app_name}" \
+    "${_msg[*]}" >&2
+}
+
+# Show an ERROR message then exit with status
+# $1: message string
+# $2: exit code number (with 0 does not exit)
+_msg_error() {
+  local \
+    _msg=(
+      "${1}"
+    ) \
+    _error=${2}
+  _printf \
+    '[%s] ERROR: %s\n' \
+    "${app_name}" \
+    "${_msg[*]}" >&2
+  if (( _error > 0 )); then
+    exit "${_error}"
+  fi
+}
+
+# Sets object string attributes
+# $1: object
+# $2: an object string attribute
+# $3: a value
+_set() {
+  local \
+    _obj="${1}" \
+    _var="${2}" \
+    _value="${3}"
+  printf \
+    -v "${_obj}_${_var}" \
+    "%s" \
+    "${_value}"
+}
+
+# Returns type ('string', 'list', 'dict') given
+# its name
+# $1: an object
+_get_type() {
+  local \
+    _obj="${1}" \
+    _type="string" \
+    _declare
+  _declare="$( \
+    declare \
+      -p \
+        "${_obj}" 2>&1)"
+  [[ \
+    "${_declare}" == \
+    *"declare:"*"${_obj}"*": not found" ]] && \
+    _type="undefined"
+  [[ \
+    "${_declare}" == \
+    "declare -A "* ]] && \
+    _type="dict"
+  [[ \
+    "${_declare}" == \
+    "typeset -a"* ]] && \
+    _type="array"
+  echo \
+    "${_type}"
+}
+
+# Returns an attribute value for a 
+# given object
+# $1: an object
+# $2: an object attribute
+_get() {
+  local \
+    _obj="${1}" \
+    _var="${2}" \
+    _ass_target \
+    _ass_type \
+    _msg \
+    _ref \
+    _type \
+    _target
+  _ass_target="${_obj}"
+  _target="${_obj}_${_var}"
+  _ref="${_target}[@]"
+  _type="$( \
+    _get_type \
+      "${_target}")"
+  _ass_type="$( \
+    _get_type \
+      "${_ass_target}")"
+  [[ "${_type}" == "undefined" ]] && \
+    _msg=(
+      "Attribute '${_var}' is not defined"
+      "for object '${_obj}'") && \
+    _msg_error \
+      "${_msg[*]}" \
+      1
+  [[ "${_ass_type}" == "dict" ]] && \
+    echo \
+      "${_obj[${_var}]}" && \
+    return
+  printf \
+    "%s\n" \
+    "${!_ref}"
+}
+
+_check_cmd(){
+  local \
+    _cmd="${1}" \
+    _cmd_var \
+    _flag="" \
+    _pkgs=()
+  shift \
+    1
+  _pkgs=(
+    "$@"
+  )
+  _cmd_var="$( \
+    printf \
+      "%s" \
+      "${_cmd}" | \
+      sed \
+        "s/-/_/g")"
+  command \
+     -v \
+     "${_cmd}" &> /dev/null && \
+    printf \
+      -v \
+        "_${_cmd_var}" \
+      "%s" \
+      "$( \
+        command \
+          -v \
+          "${_cmd}")" && \
+    _flag=true
+  [ -e "${_path}/${_cmd}" ] && \
+    printf \
+      -v \
+        "_${_cmd_var}" \
+      "%s" \
+      "${_path}/${_cmd}" && \
+    _flag=true
+  if [[ "${_flag}" != "true" ]]; then
+    if [[ "${_pkgs[*]}" != "" ]]; then
+      _cmd="${_pkgs[*]}"
+    fi
+    _msg_error \
+      "Install ${_cmd}" \
+      1
+  fi
+}
+
+# Reassign an object variable
+# if an override variable is defined;
+# otherwise it defaults
+# to an input default.
+# $1: object
+# $2: variable
+# $3: default value
+_set_override() {
+  local \
+    _obj="${1}" \
+    _var="${2}" \
+    _default="${3}"
+  if [[ -v "override_${_obj}_${_var}" ]]; then
+    _set \
+      "${_obj}" \
+      "${_var}" \
+      "$( \
+        _get \
+	  "override_${_obj}" \
+          "${_var}")"
+  elif [[ -z \
+	    "$( \
+	      _get \
+	        "${_obj}" \
+                "${_var}")" ]]; then
+    _set \
+      "${_obj}" \
+      "${_var}" \
+      "${_default}"
+  fi
+}
+
+# Re-assign an object variable pointing to
+# a path if an override variable is defined,
+# otherwise it defaults to an input path
+# $1: object
+# $2: variable
+# $3: value (a path)
+_override_path() {
+  local \
+    _obj="${1}" \
+    _var="${2}" \
+    _value="${3}" \
+    _path
+  _path="$( \
+    realpath \
+      -q -- \
+      "${_value}" || \
+      true)"
+  [[ "${_path}" == "" ]] && \
+    _msg_error \
+      "${_value} is not a valid path." \
+      1
+  _set_override \
+    "${_obj}" \
+    "${_var}" \
+    "${_value}"
+  _set \
+    "${_obj}" \
+    "${_var}" \
+    "$( \
+      realpath -- \
+        "$( \
+	  _get \
+	    "${_obj}" \
+            "${_var}")")"
+}
+
+_requirements() {
+  if \
+    [[ "$( \
+      command \
+        -v \
+	  "shfmt")" == "" ]]; then
+    _msg_warning \
+      "'shfmt' not found, unindented output file."
+  fi
+}
 
 _decrypt() {
   local \
     _uuid="${1}" \
     _label="${2}" \
     _retries="${3}" \
+    _attempt=1 \
     _decrypt_cmd=()
+  [[ "${_retries}" == "" ]] && \
+    _retries="3"
   _decrypt_cmd=(
     'if [ test -e "(crypto0)" ]; then'
       'set'
@@ -32,8 +383,17 @@ _decrypt() {
          "'Device not found or incorrect passphrase/key.';"
     "fi;"
   )
-  echo \
-    "${_decrypt_cmd[*]}"
+  while (( "${_attempt}" < "${_retries}" )); do
+    echo \
+      "${_decrypt_cmd[*]}"
+    _attempt+=1
+  done
+}
+
+_mount() {
+  local \
+    _ciao 
+  echo ciao
 }
 
 _make_entry() {
@@ -112,11 +472,269 @@ _make_entry() {
  
 }
 
+# Set defaults and, if present, overrides
+# from arch-grub command line option parameters
+_set_overrides() {
+  local \
+    _embed_cfg=""
+  _set_override \
+    "plain" \
+    "text" \
+    "false"
+  _set_override \
+    "cfg" \
+    "checksum" \
+    "true"
+  [[ "$(_get \
+          "plain" \
+	  "text")" == true ]] && \
+    _embed_cfg="-embed"
+  _override_path \
+    "grub" \
+    "cfg" \
+    "$(_get_cfg_path)/grub${_embed_cfg}.cfg"
+  _set_override \
+    "entry" \
+    "name" \
+    "Arch Linux"
+  _set_override \
+    "short" \
+    "name" \
+    "arch"
+  _set_override \
+    "arch" \
+    "name" \
+    "x86_64"
+  _set_override \
+    "boot" \
+    "method" \
+    "efi"
+  if [[ -v override_quiet ]]; then
+    quiet="${override_quiet}"
+  elif [[ -z "${quiet}" ]]; then
+    quiet="y"
+  fi
+  if [[ -v override_color ]]; then
+    color="${override_color}"
+  elif [[ -z "${color}" ]]; then
+    color="n"
+  fi
+
+}
+
+# Show help usage, with an exit status.
+# $1: exit status number.
+_usage() {
+  local \
+    _usage_text
+  IFS='' \
+    read \
+      -r \
+      -d '' \
+      _usage_text << \
+        ENDUSAGETEXT || true
+usage: $(_get "app" "name") [options] <out_file>
+  options:
+     -a <arch_name>       Architecture
+			  Default: '$(_get "arch" "name")'
+     -r                   Disable configuration file integrity
+                          check.
+                          Default: '$(_get "cfg" "checksum")'
+     -L <entry_name>      Sets an alternative entry name
+			  Default: '$(_get "entry" "name")'
+     -l <short_name>      Short entry name.
+			  Default: '$(_get "short" "name")'
+     -U <fsuuid>          add an encrypted disk UUID to the
+                          resulting configuration file.
+     -u <fsuuid>          Add a boot disk UUID, to the resulting
+                          bootloader.
+     -K <kernel>          Add the path of a kernel inside a boot disk.
+     -k <kernel_sum>      SHA256 sums of the kernel.
+     -I <initrd>          Path of the initrd inside the
+                          boot disks.
+     -i <initrd_sum>      SHA256 sum of the initrd.
+     -e <boot_key>        Path of the encryption key inside
+                          the boot disk.
+                          Set to "" for unencrypted disks.
+     -h                   This message.
+     -c                   Enable color output
+     -v                   Enable verbose output
+     -w <work_dir>        Set the working directory (can't be a bind mount).
+		          Default: '$(_get "work" "dir")}'
+
+  <out>         Output directory or GRUB binary path.
+                Default: ./BOOT<arch_code>.<platform>
+ENDUSAGETEXT
+  _printf \
+    '%s\n' \
+    "${_usage_text}"
+  exit \
+    "${1}"
+}
+
+_display_flags() {
+  local \
+    _flags=(
+      "${1}"
+    ) \
+    _flag
+  for _flag \
+    in "${_flags[@]}"; do
+  _msg_info "                              ${_flag}"
+  done
+}
+
+
+_display_devices() {
+  local \
+    _uuids=(
+      "$@"
+    ) \
+    _uuid
+  for _uuid \
+    in "${_uuids[@]}"; do
+  _msg_info "                            ${_uuid}"
+  done
+}
+
+# Shows configuration options.
+_show_config() {
+  local \
+    _build_date \
+    _boot_uuids=()
+  # shellcheck disable=SC2207
+  _boot_uuids=( $( \
+    _get \
+      "boot" \
+      "uuids")
+  )
+  [[ "${_boot_uuids[*]}" == "" ]] && \
+    _boot_uuids+=(
+      "GRUB drive"
+    )
+  TZ=UTC \
+    printf \
+      -v _build_date \
+      '%(%FT%R%z)T' \
+      "${SOURCE_DATE_EPOCH}"
+  _msg_info "${app_name} configuration"
+  _msg_info "               Build Date:   $(_get "_build" "date")"
+  _msg_info "             Architecture:   $(_get "arch" "name")"
+  _msg_info "               Entry name:   $(_get "entry" "name")"
+  _msg_info "               Short name:   $(_get "short" "name")"
+  _msg_info "               Boot UUIDS:"
+  _display_flags                          "${_boot_uuids[*]}"
+  _msg_info "   Unencrypted boot UUIDS:"
+  _display_flags                          "${encrypted_uuids[*]}"
+  _msg_info "                  Kernels:"
+  _display_flags                          "${kernels[*]}"
+  _msg_info "                  Initrds:"
+  _display_flags                          "${initrds[*]}"
+  _msg_info "                Boot Keys:"
+  _display_flags                          "${boot_keys[*]}"
+  _msg_info "              Output file:   ${out}"
+}
+
+# Colorized print
+_printf() {
+  local \
+    _args=()
+    _pygmentize_opts=()
+  _pygmentize_opts=(
+    -g
+    -O style=emacs
+  )
+  _args=(
+      "$@"
+  )
+  # shellcheck disable=SC2059
+  _sho \
+    "$( \
+      printf \
+        "${_args[@]}")" \
+    "${_pygmentize_opts[@]}"
+}
+
+# Colorized Display function
+_sho() {
+  local \
+    _text="${1}" \
+    _pygmentize
+  _pygmentize="$( \
+    command \
+      -v \
+      "pygmentize"{,2} | \
+      head \
+        -n \
+	1)"
+  shift
+  _pygmentize_opts=(
+    "$@"
+  )
+  [[ "${color}" == "y" ]] && \
+  [[ "${_pygmentize}" != "" ]] && \
+    echo \
+      "${_text}" | 
+      "${_pygmentize}" \
+        "${_pygmentize_opts[@]}" && \
+    return
+  printf \
+    "%s\n" \
+    "${_text}"
+}
+
+_globals
+_global_variables
+
+_requirements
+
+# shellcheck disable=SC2034
+while \
+  getopts \
+    'C:p:a:rL:l:U:u:K:k:I:i:n:e:cvh?' \
+    arg; do
+  case \
+    "${arg}" in
+    a) override_arch_name="${OPTARG}" ;;
+    r) override_cfg_checksum="false" ;;
+    L) override_entry_name="${OPTARG}" ;;
+    l) override_short_name="${OPTARG}" ;;
+    U) __uuid="${OPTARG} && \
+       encrypted_uuids+=(
+         "${__uid}";;
+    U) __uuid="${OPTARG} && \
+       boot_uuids+=(
+         "${__uuid}";;
+    K) kernel[${__uuid}]="${OPTARG}";;
+    k) kernel_sum[${__uuid}]="${OPTARG}";;
+    I) initrd[${__uid}]="${OPTARG}";;
+    i) initrd_sum[${__uid}]="${OPTARG}";;
+    n) name[${__uuid}]="${OPTARG}";;  
+    e) boot_key[${__uid}]="${OPTARG}";;
+    c) override_color="y" ;;
+    v) override_quiet="n" ;;
+    h|?) _set_overrides && \
+         _usage \
+           0 ;;
+    *)
+    _msg_error \
+      "Invalid argument '${arg}'" \
+      0
+    _usage \
+      1
+    ;;
+  esac
+done
+shift \
+  $(( \
+    OPTIND - 1 \
+  ))
+
 _entry_name="${1}"
 _short_name="${2}"
 _arch="${3}"
 
-_make_entry \
-  "${_entry_name}" \
-  "${_short_name}" \
-  "${_arch}"
+# _make_entry \
+#   "${_entry_name}" \
+#   "${_short_name}" \
+#   "${_arch}"

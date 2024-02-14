@@ -191,15 +191,21 @@ _get() {
   local \
     _obj="${1}" \
     _var="${2}" \
+    _ass_target \
+    _ass_type \
     _msg \
     _ref \
     _type \
     _target
+  _ass_target="${_obj}"
   _target="${_obj}_${_var}"
   _ref="${_target}[@]"
   _type="$( \
     _get_type \
       "${_target}")"
+  _ass_type="$( \
+    _get_type \
+      "${_ass_target}")"
   [[ "${_type}" == "undefined" ]] && \
     _msg=(
       "Attribute '${_var}' is not defined"
@@ -207,7 +213,7 @@ _get() {
     _msg_error \
       "${_msg[*]}" \
       1
-  [[ "${_type}" == "dict" ]] && \
+  [[ "${_ass_type}" == "dict" ]] && \
     echo \
       "${_obj[${_var}]}" && \
     return
@@ -260,6 +266,74 @@ _check_cmd(){
       "Install ${_cmd}" \
       1
   fi
+}
+
+# Reassign an object variable
+# if an override variable is defined;
+# otherwise it defaults
+# to an input default.
+# $1: object
+# $2: variable
+# $3: default value
+_set_override() {
+  local \
+    _obj="${1}" \
+    _var="${2}" \
+    _default="${3}"
+  if [[ -v "override_${_obj}_${_var}" ]]; then
+    _set \
+      "${_obj}" \
+      "${_var}" \
+      "$( \
+        _get \
+	  "override_${_obj}" \
+          "${_var}")"
+  elif [[ -z \
+	    "$( \
+	      _get \
+	        "${_obj}" \
+                "${_var}")" ]]; then
+    _set \
+      "${_obj}" \
+      "${_var}" \
+      "${_default}"
+  fi
+}
+
+# Re-assign an object variable pointing to
+# a path if an override variable is defined,
+# otherwise it defaults to an input path
+# $1: object
+# $2: variable
+# $3: value (a path)
+_override_path() {
+  local \
+    _obj="${1}" \
+    _var="${2}" \
+    _value="${3}" \
+    _path
+  _path="$( \
+    realpath \
+      -q -- \
+      "${_value}" || \
+      true)"
+  [[ "${_path}" == "" ]] && \
+    _msg_error \
+      "${_value} is not a valid path." \
+      1
+  _set_override \
+    "${_obj}" \
+    "${_var}" \
+    "${_value}"
+  _set \
+    "${_obj}" \
+    "${_var}" \
+    "$( \
+      realpath -- \
+        "$( \
+	  _get \
+	    "${_obj}" \
+            "${_var}")")"
 }
 
 _requirements() {
@@ -543,74 +617,6 @@ _build() {
     "${out}"
 }
 
-# Reassign an object variable
-# if an override variable is defined;
-# otherwise it defaults
-# to an input default.
-# $1: object
-# $2: variable
-# $3: default value
-_set_override() {
-  local \
-    _obj="${1}" \
-    _var="${2}" \
-    _default="${3}"
-  if [[ -v "override_${_obj}_${_var}" ]]; then
-    _set \
-      "${_obj}" \
-      "${_var}" \
-      "$( \
-        _get \
-	  "override_${_obj}" \
-          "${_var}")"
-  elif [[ -z \
-	    "$( \
-	      _get \
-	        "${_obj}" \
-                "${_var}")" ]]; then
-    _set \
-      "${_obj}" \
-      "${_var}" \
-      "${_default}"
-  fi
-}
-
-# Re-assign an object variable pointing to
-# a path if an override variable is defined,
-# otherwise it defaults to an input path
-# $1: object
-# $2: variable
-# $3: value (a path)
-_override_path() {
-  local \
-    _obj="${1}" \
-    _var="${2}" \
-    _value="${3}" \
-    _path
-  _path="$( \
-    realpath \
-      -q -- \
-      "${_value}" || \
-      true)"
-  [[ "${_path}" == "" ]] && \
-    _msg_error \
-      "${_value} is not a valid path." \
-      1
-  _set_override \
-    "${_obj}" \
-    "${_var}" \
-    "${_value}"
-  _set \
-    "${_obj}" \
-    "${_var}" \
-    "$( \
-      realpath -- \
-        "$( \
-	  _get \
-	    "${_obj}" \
-            "${_var}")")"
-}
-
 _make_entry() {
   local \
     _entry_name="${1}" \
@@ -785,7 +791,7 @@ usage: $(_get "app" "name") [options] <out_file>
                           boot disks.
      -i <initrd_sum>      SHA256 sum of the initrd.
      -e <boot_key>        Path of the encryption key inside
-                          the boot disks.
+                          the boot disk.
                           Set to "" for unencrypted disks.
      -h                   This message.
      -c                   Enable color output
@@ -807,7 +813,8 @@ _display_flags() {
   local \
     _flags=(
       "${1}"
-    )
+    ) \
+    _flag
   for _flag \
     in "${_flags[@]}"; do
   _msg_info "                              ${_flag}"
