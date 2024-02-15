@@ -71,17 +71,16 @@ _global_variables() {
   boot_method=""
   boot_uuids=()
   encrypted_uuids=()
-  fields=(
-    encryption
+  attributes=(
     key
     kernel
     initrd
     ksum
     isum
     name
-    ssd
+    drive
   )
-  for _field in "${fields[@]}"; do
+  for _field in "${attributes[@]}"; do
     declare \
       -g \
       -A \
@@ -170,8 +169,6 @@ _set() {
       "${_obj}")"
   [[ "${_ass_type}" == "dict" ]] && \
     _target="${_ass_target}"
-  _msg_info \
-    "setting '${_target}' to '${_value}'"
   printf \
     -v "${_target}" \
     "%s" \
@@ -231,7 +228,7 @@ _get() {
     _get_type \
       "${_ass_target}")"
   [[ "${_type}" == "undefined" ]] && \
-  [[ "${_ass_type}" != "dict" ]] && \
+  [[ "${_ass_type}" == "undefined" ]] && \
     _msg=(
       "Attribute '${_var}' is not defined"
       "for object '${_obj}'") && \
@@ -239,6 +236,7 @@ _get() {
       "${_msg[*]}" \
       1
   [[ "${_ass_type}" == "dict" ]] && \
+  [[ -v "${_ass_ref}" ]] && \
     _ref="${_ass_ref}"
   printf \
     "%s\n" \
@@ -516,18 +514,34 @@ _set_overrides() {
   [[ "${boot_uuids[@]}" == "" ]] && \
     boot_uuids+=(
       'memdisk'
-    )
+    ) && \
+    _set \
+      "name" \
+      "memdisk" \
+      "arch" && \
+    _set \
+      "kernel" \
+      "memdisk" \
+      "vmlinuz"
+    _set \
+      "initrd" \
+      "memdisk" \
+      "initrd.img"
+    _set \
+      "drive" \
+      "memdisk" \
+      "ssd"
   [[ "${encrypted_uuids[@]}" == "" ]] && \
     encrypted_uuids+=(
       'memdisk'
     )
+    _set "key" \
+         "memdisk" \
+         "boot.key"
   for _uuid \
     in "${encrypted_uuids[@]}"; do
     _msg_info \
-      "setting 'boot.key' as key for '${_uuid}'"
-    _set "encryption" \
-         "${_uuid}" \
-         "boot.key"
+      "ciao"
   done
   if [[ -v override_quiet ]]; then
     quiet="${override_quiet}"
@@ -571,14 +585,14 @@ usage: $(_get "app" "name")
      -c                   Enable color output
      -v                   Enable verbose output
   boot disk options:
-     -s                   Whether boot disk is on a
-                          solid state drive.
      -n <name>            Boot disk nickname.
      -K <kernel>          Kernel path inside the boot disk.
      -k <ksum>            SHA256 sum of the kernel.
      -I <initrd>          Path of the initrd inside the
                           boot disks.
      -i <isum>            SHA256 sum of the initrd.
+     -t                   Drive type ('hdd', 'ssd')
+                          Default: 'ssd'
      -e <key>             Path of the encryption key inside
                           the boot disk.
 ENDUSAGETEXT
@@ -607,39 +621,40 @@ _display_devices() {
     _uuids=(
       "$@"
     ) \
-    _uuid
+    _uuid \
+    _field
   for _uuid \
     in "${_uuids[@]}"; do
-    _key="$( \
-      _get \
-        "encryption" \
-        "${_uuid}")"
-    _name="$( \
-      _get \
-        "name" \
-        "${_uuid}")"
+    for _field \
+      in "${attributes[@]}"; do
+      printf \
+        -v \
+          "_${_field}" \
+        "$( \
+          _get \
+            "${_field}" \
+            "${_uuid}")"
+    done
     _msg_info \
-      "                      Name: ${_uuid}"
+      ""
     _msg_info \
-      "                      UUID: ${_uuid}"
+      "                     Name:     ${_name}"
     _msg_info \
-      "                       Key: ${_key}"
+      "                     UUID:     ${_uuid}"
     _msg_info \
-      "                    Kernel: ${_kernel}"
+      "                      Key:     ${_key}"
     _msg_info \
-      "                    Initrd: ${_initrd}"
-
-  # declare \
-  #   -A \
-  #   encryption \
-  #   key \
-  #   kernel \
-  #   initrd \
-  #   kernel_sums \
-  #   initrd_sums \ 
-  #   name \
-  #   ssd
-  # _msg_info "                            ${_uuid}"
+      "                   Kernel:     ${_kernel}"
+    _msg_info \
+      "                   Initrd:     ${_initrd}"
+    _msg_info \
+      "          Kernel checksum:     ${_ksum:-None}"
+    _msg_info \
+      "          Initrd checksum:     ${_isum:-None}"
+    _msg_info \
+      "               Drive type:     ${_drive}"
+    _msg_info \
+      ""
   done
 }
 
@@ -649,15 +664,13 @@ _show_config() {
     _build_date \
     _boot_uuids=()
   # shellcheck disable=SC2207
-  _boot_uuids=( $( \
+  _out_file="$( \
     _get \
-      "boot" \
-      "uuids")
-  )
-  [[ "${_boot_uuids[*]}" == "" ]] && \
-    _boot_uuids+=(
-      "GRUB drive"
-    )
+      "out" \
+      "file")"
+  [[ \
+    "${_out_file}" == "" ]] && \
+    _out_file="stdout"
   TZ=UTC \
     printf \
       -v _build_date \
@@ -671,15 +684,7 @@ _show_config() {
   _msg_info "                  Devices:"
   _display_devices                        "${_encrypted_uuids[@]}" \
                                           "${boot_uuids[@]}"
-  _msg_info "   Unencrypted boot UUIDS:"
-  _display_flags                          "${encrypted_uuids[*]}"
-  _msg_info "                  Kernels:"
-  _display_flags                          "${kernels[*]}"
-  _msg_info "                  Initrds:"
-  _display_flags                          "${initrds[*]}"
-  _msg_info "                Boot Keys:"
-  _display_flags                          "${boot_keys[*]}"
-  _msg_info "              Output file:   $(_get "out" "file")"
+  _msg_info "              Output file:   ${_out_file}"
 }
 
 # Colorized print
@@ -759,6 +764,7 @@ while \
     i) isum[${_uuid}]="${OPTARG}";;
     n) name[${_uuid}]="${OPTARG}";;  
     e) key[${_uuid}]="${OPTARG}";;
+    t) drive[${_uuid}]="${OPTARG}";;
     o) override_out_file="${OPTARG}";;
     c) override_color="y" ;;
     v) override_quiet="n" ;;
