@@ -21,6 +21,7 @@ install: install-scripts install-doc
 install-scripts:
 
 	install -vDm 755 arch-grub/mkgrub "$(BIN_DIR)/mkgrub"
+	install -vDm 755 arch-grub/mkgrubcfg "$(BIN_DIR)/mkgrubcfg"
 	install -vDm 644 configs/grub-embed.cfg "$(LIB_DIR)/mkgrub/configs/grub-embed.cfg"
 	install -vDm 644 configs/grub.cfg "$(LIB_DIR)/mkgrub/configs/grub.cfg"
 
