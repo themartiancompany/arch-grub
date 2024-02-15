@@ -430,17 +430,17 @@ _make_entry() {
     _tmp_cfg
   _tmp_cfg="$(mktemp)"
   _entry_line=(
-    menuentry
-      "\"${_short_entry} (${_arch})\""
-    --class
-      arch
-    --class
-      gnu-linux
-    --class
-      gnu
-    --class
-      os
-    --id
+    'menuentry'
+      "\'${_short_entry} (${_arch})\'"
+    '--class'
+      'arch'
+    '--class'
+      'gnu-linux'
+    '--class'
+      'gnu'
+    '--class'
+      'os'
+    '--id'
       "'${_short_name}'"
     '{'
   )
