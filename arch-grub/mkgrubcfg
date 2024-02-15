@@ -813,13 +813,14 @@ while \
     ;;
   esac
 done
-# shellcheck disable=SC2034
 shift \
   $(( \
     OPTIND - 1 \
   ))
+# shellcheck disable=SC2034
 (( ${#} == 0 )) && \
   out=""
+# shellcheck disable=SC2034
 (( ${#} != 0 )) && \
   out="$( \
     realpath \
