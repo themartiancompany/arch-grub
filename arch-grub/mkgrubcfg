@@ -640,6 +640,7 @@ _display_flags() {
   done
 }
 
+# shellcheck disable=SC2154
 _display_devices() {
   local \
     _encrypted="${1}" \
@@ -770,7 +771,7 @@ _global_variables
 
 _requirements
 
-# shellcheck disable=SC2034
+# shellcheck disable=SC2004
 while \
   getopts \
     'a:L:l:U:u:K:k:I:i:n:e:t:o:cvh?' \
