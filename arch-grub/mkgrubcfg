@@ -442,7 +442,7 @@ _make_entry() {
       os
     --id
       "'${_short_name}'"
-    {
+    '{'
   )
   _entry_header=(
     'set'
