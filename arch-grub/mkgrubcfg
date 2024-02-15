@@ -416,6 +416,7 @@ _mount() {
   echo ciao
 }
 
+# shellcheck disable=SC2016
 # shellcheck disable=SC1083
 _make_entry() {
   local \
@@ -452,7 +453,6 @@ _make_entry() {
   _decrypt_loop=(
     # "${_decrypt_cmd[@]}"
   )
-  # shellcheck disable=SC2016
   _encrypted_devices_loop=(
     'for _uuid'
       'in "${_boot_uuids[@]}"; do'
