@@ -429,6 +429,7 @@ _make_entry() {
     _unencrypted_devices_loop=() \
     _tmp_cfg
   _tmp_cfg="$(mktemp)"
+  # shellcheck disable=SC1083
   _entry_line=(
     'menuentry'
       "\'${_short_entry} (${_arch})\'"
