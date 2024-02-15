@@ -881,6 +881,7 @@ _set_overrides
 	  "method")")"
 shift \
   1
+# shellcheck disable=SC2034
 mkgrubcfg_opts=(
   "$@"
 )

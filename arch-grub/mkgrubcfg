@@ -813,6 +813,7 @@ while \
     ;;
   esac
 done
+# shellcheck disable=SC2034
 shift \
   $(( \
     OPTIND - 1 \
