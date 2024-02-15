@@ -659,6 +659,7 @@ _display_devices() {
       printf \
         -v \
           "_${_field}" \
+        "%s" \
         "$( \
           _get \
             "${_field}" \
