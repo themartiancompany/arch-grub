@@ -511,37 +511,59 @@ _set_overrides() {
     "arch" \
     "name" \
     "x86_64"
-  [[ "${boot_uuids[@]}" == "" ]] && \
-    boot_uuids+=(
-      'memdisk'
-    ) && \
-    _set \
-      "name" \
-      "memdisk" \
-      "arch" && \
-    _set \
-      "kernel" \
-      "memdisk" \
-      "vmlinuz"
-    _set \
-      "initrd" \
-      "memdisk" \
-      "initrd.img"
-    _set \
-      "drive" \
-      "memdisk" \
-      "ssd"
-  [[ "${encrypted_uuids[@]}" == "" ]] && \
-    encrypted_uuids+=(
-      'memdisk'
-    )
-    _set "key" \
-         "memdisk" \
-         "boot.key"
+  boot_uuids+=(
+    'memdisk'
+  )
+  _set \
+    "name" \
+    "memdisk" \
+    "efiboot"
+  _set \
+    "kernel" \
+    "memdisk" \
+    "vmlinuz"
+  _set \
+    "initrd" \
+    "memdisk" \
+    "initrd.img"
+  _set \
+    "drive" \
+    "memdisk" \
+    "ssd"
+  encrypted_uuids+=(
+      'memdisk_encrypted_kernel'
+  )
+  _set \
+    "name" \
+    "memdisk_encrypted_kernel" \
+    "efibootcryptodisk"
+  _set \
+    "key" \
+    "memdisk_encrypted_kernel" \
+    "boot.key"
+  _set \
+    "kernel" \
+    "memdisk_encrypted_kernel" \
+    "vmlinuz"
+  _set \
+    "initrd" \
+    "memdisk_encrypted_kernel" \
+    "initrd.img"
+  _set \
+    "drive" \
+    "memdisk_encrypted_kernel" \
+    "ssd"
   for _uuid \
     in "${encrypted_uuids[@]}"; do
-    _msg_info \
-      "ciao"
+    [[ \
+      "$( \
+        _get \
+          "key" \
+          "${_uuid}")" == "" ]] &&  \
+      _set \
+        "key" \
+        "memdisk" \
+        "boot.key"
   done
   if [[ -v override_quiet ]]; then
     quiet="${override_quiet}"
@@ -618,11 +640,15 @@ _display_flags() {
 
 _display_devices() {
   local \
-    _uuids=(
-      "$@"
-    ) \
+    _encrypted="${1}" \
+    _uuids=() \
     _uuid \
     _field
+  shift \
+    1
+  _uuids=(
+    "$@"
+  )
   for _uuid \
     in "${_uuids[@]}"; do
     for _field \
@@ -636,13 +662,12 @@ _display_devices() {
             "${_uuid}")"
     done
     _msg_info \
-      ""
-    _msg_info \
       "                     Name:     ${_name}"
     _msg_info \
       "                     UUID:     ${_uuid}"
-    _msg_info \
-      "                      Key:     ${_key}"
+    [[ "${_encrypted}" == "true" ]] && \
+      _msg_info \
+        "                      Key:     ${_key:-Passphrase}"
     _msg_info \
       "                   Kernel:     ${_kernel}"
     _msg_info \
@@ -681,9 +706,12 @@ _show_config() {
   _msg_info "             Architecture:   $(_get "arch" "name")"
   _msg_info "               Entry name:   $(_get "entry" "name")"
   _msg_info "               Short name:   $(_get "short" "name")"
-  _msg_info "                  Devices:"
-  _display_devices                        "${_encrypted_uuids[@]}" \
-                                          "${boot_uuids[@]}"
+  _msg_info "         Encrypted drives:"
+  _msg_info ""
+  _display_devices                "true"  "${encrypted_uuids[@]}"
+  _msg_info "       Unencrypted drives:"
+  _msg_info ""
+  _display_devices               "false"  "${boot_uuids[@]}"
   _msg_info "              Output file:   ${_out_file}"
 }
 
@@ -743,7 +771,7 @@ _requirements
 # shellcheck disable=SC2034
 while \
   getopts \
-    'a:L:l:U:u:K:k:I:i:n:e:o:cvh?' \
+    'a:L:l:U:u:K:k:I:i:n:e:t:o:cvh?' \
     arg; do
   case \
     "${arg}" in
