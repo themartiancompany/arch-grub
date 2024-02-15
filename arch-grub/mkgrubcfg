@@ -416,6 +416,7 @@ _mount() {
   echo ciao
 }
 
+# shellcheck disable=SC1083
 _make_entry() {
   local \
     _entry_name="${1}" \
@@ -442,10 +443,8 @@ _make_entry() {
       'os'
     '--id'
       "'${_short_name}'"
-    # shellcheck disable=SC1083
     '{'
   )
-  # shellcheck disable=SC1009
   _entry_header=(
     'set'
       'gfxpayload=keep;'
