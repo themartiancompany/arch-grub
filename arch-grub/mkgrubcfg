@@ -533,6 +533,7 @@ _make_grub_cfg() {
     _entry_name="${1}" \
     _short_entry="${2}" \
     _arch="${3}" \
+    _out_file="${4}"
     _entry \
     _entry_body=() \
     _entry_header=() \
@@ -589,14 +590,17 @@ _make_grub_cfg() {
     "$( \
       cat \
         "${_tmp_cfg}")")"
+  [[ "${_out_file}" != "" ]] && \
+    _tmp_cfg="${_out_file}"
   printf \
     "%s\n" \
     "${_entry}" > \
     "${_tmp_cfg}"
-  _sho \
-    "$( \
-      cat \
-        "${_tmp_cfg}")"
+  [[ "${_out_file}" == "" ]] && \
+    _sho \
+      "$( \
+        cat \
+          "${_tmp_cfg}")"
 }
 
 # Set defaults and, if present, overrides
