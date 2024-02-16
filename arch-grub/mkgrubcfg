@@ -79,6 +79,7 @@ _global_variables() {
     isum
     name
     drive
+    kparams
   )
   for _field in "${attributes[@]}"; do
     declare \
@@ -229,6 +230,7 @@ _get() {
       "${_ass_target}")"
   [[ "${_type}" == "undefined" ]] && \
   [[ "${_ass_type}" == "undefined" ]] && \
+  [[ ! -v "${_ass_ref}" ]] && \
     _msg=(
       "Attribute '${_var}' is not defined"
       "for object '${_obj}'") && \
@@ -236,8 +238,9 @@ _get() {
       "${_msg[*]}" \
       1
   [[ "${_ass_type}" == "dict" ]] && \
-  [[ -v "${_ass_ref}" ]] && \
-    _ref="${_ass_ref}"
+    if [[ -v "${_ass_ref}" ]]; then
+      _ref="${_ass_ref}"
+    fi
   printf \
     "%s\n" \
     "${!_ref}"
@@ -411,7 +414,10 @@ _encrypted_mount_cmd() {
       "echo"
         "'${_label} (${_uuid})';"
       'cryptomount'
-         "${_uuid};"
+        "$( \
+          echo \
+            "${_uuid}" | \
+          sed "s|-||g");"
     'fi;'
     'if [ test -e "(crypto0)" ]; then'
       'set'
@@ -444,10 +450,10 @@ _encrypted_mount() {
     _attempt=1
   [[ "${_retries}" == "" ]] && \
     _retries="3"
-  while (( "${_attempt}" < "${_retries}" )); do
+  while (( "${_attempt}" <= "${_retries}" )); do
     echo \
       "$(_encrypted_mount_cmd)"
-    _attempt+=1
+    _attempt=$(( _attempt + 1))
   done
 }
 
@@ -492,11 +498,13 @@ _menuentry() {
       '--id'
         "'${_id}'"
     '{'
-    "${_body}"
-    '}'
   )
   echo \
     "${_entry[*]}"
+  echo \
+    "${_body}"
+  echo \
+    "}"
 }
 
 _mount() {
@@ -527,6 +535,7 @@ _make_grub_cfg() {
     _entry_name="${1}" \
     _short_entry="${2}" \
     _arch="${3}" \
+    _entry \
     _entry_body=() \
     _entry_header=() \
     _mount_block=() \
@@ -551,7 +560,10 @@ _make_grub_cfg() {
   _linux_line=(
     'linux'
       '"${disk}${_kernel}"'
-         "${_kernel_params};"
+         "$( \
+           _get \
+             "kparams" \
+             "${_uuid}");"
   )
   _initrd_line=(
     'initrd'
@@ -563,20 +575,23 @@ _make_grub_cfg() {
     "${_linux_line[@]}"
     "${_initrd_line[@]}"
     )
-  _entry=( "$( \
-    _menuentry \
-    "${_entry_name} (${_arch})" \
-    "${_short_name}" \
-    "${_entry_body}")" )
-  printf \
-    "%s\n" \
-    "${_entry[*]}" > \
+  echo \
+    "${_entry_body[@]}" > \
     "${_tmp_cfg}"
-  #cat \
-  #  "${_tmp_cfg}"
   shfmt \
     -l \
     -w "${_tmp_cfg}"
+  _entry="$( \
+    _menuentry \
+    "${_entry_name} (${_arch})" \
+    "${_short_entry}" \
+    "$( \
+      cat \
+        "${_tmp_cfg}")")"
+  printf \
+    "%s\n" \
+    "${_entry}" > \
+    "${_tmp_cfg}"
   cat \
     "${_tmp_cfg}"
 }
@@ -610,38 +625,62 @@ _set_overrides() {
   _set \
     "kernel" \
     "memdisk" \
-    "vmlinuz"
+    "/vmlinuz"
   _set \
     "initrd" \
     "memdisk" \
-    "initrd.img"
+    "/initrd.img"
+  _set \
+    "ksum" \
+    "memdisk" \
+    ""
+  _set \
+    "isum" \
+    "memdisk" \
+    ""
   _set \
     "drive" \
     "memdisk" \
     "ssd"
+  _set \
+    "kparams" \
+    "memdisk" \
+    ""
   encrypted_uuids+=(
-      'memdisk_encrypted_kernel'
+      'boot.img'
   )
   _set \
     "name" \
-    "memdisk_encrypted_kernel" \
+    "boot.img" \
     "efibootcryptodisk"
   _set \
     "key" \
-    "memdisk_encrypted_kernel" \
+    "boot.img" \
     "boot.key"
   _set \
     "kernel" \
-    "memdisk_encrypted_kernel" \
+    "boot.img" \
     "vmlinuz"
   _set \
+    "ksum" \
+    "boot.img" \
+    ""
+  _set \
+    "isum" \
+    "boot.img" \
+    ""
+  _set \
     "initrd" \
-    "memdisk_encrypted_kernel" \
+    "boot.img" \
     "initrd.img"
   _set \
     "drive" \
-    "memdisk_encrypted_kernel" \
+    "boot.img" \
     "ssd"
+  _set \
+    "kparams" \
+    "boot.img" \
+    ""
   for _uuid \
     in "${encrypted_uuids[@]}"; do
     [[ \
@@ -651,8 +690,8 @@ _set_overrides() {
           "${_uuid}")" == "" ]] &&  \
       _set \
         "key" \
-        "memdisk" \
-        "boot.key"
+        "${_uuid}" \
+        "/boot.key"
   done
   if [[ -v override_quiet ]]; then
     quiet="${override_quiet}"
@@ -698,6 +737,7 @@ usage: $(_get "app" "name")
   boot disk options:
      -n <name>            Boot disk nickname.
      -K <kernel>          Kernel path inside the boot disk.
+     -p                   Kernel parameters
      -k <ksum>            SHA256 sum of the kernel.
      -I <initrd>          Path of the initrd inside the
                           boot disks.
@@ -769,6 +809,9 @@ _display_devices() {
       "          Initrd checksum:     ${_isum:-None}"
     _msg_info \
       "               Drive type:     ${_drive}"
+    _msg_info \
+      "        Kernel Parameters:     ${_kparams}"
+
     _msg_info \
       ""
   done
@@ -862,7 +905,7 @@ _requirements
 # shellcheck disable=SC2034
 while \
   getopts \
-    'a:L:l:U:u:K:k:I:i:n:e:t:o:cvh?' \
+    'a:L:l:U:u:K:k:I:i:n:e:t:p:o:cvh?' \
     arg; do
   case \
     "${arg}" in
@@ -884,6 +927,7 @@ while \
     n) name[${_uuid}]="${OPTARG}";;  
     e) key[${_uuid}]="${OPTARG}";;
     t) drive[${_uuid}]="${OPTARG}";;
+    p) kparams[${_uuid}]="${OPTARG}";;
     o) override_out_file="${OPTARG}";;
     c) override_color="y" ;;
     v) override_quiet="n" ;;
@@ -912,10 +956,6 @@ shift \
     realpath \
       -q -- \
       "${1}")"
-# _entry_name="${1}"
-# _short_name="${2}"
-# _arch="${3}"
-
 _set_overrides
 _show_config
 _make_grub_cfg \
@@ -931,5 +971,4 @@ _make_grub_cfg \
     _get \
       "arch" \
       "name")"
-
 # vim:set sw=2 sts=-1 et:
