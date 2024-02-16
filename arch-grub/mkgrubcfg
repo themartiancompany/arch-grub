@@ -69,7 +69,7 @@ _global_variables() {
   short_name=""
   arch_name=""
   boot_method=""
-  boot_uuids=()
+  unencrypted_uuids=()
   encrypted_uuids=()
   attributes=(
     key
@@ -368,22 +368,46 @@ _requirements() {
   fi
 }
 
-_decrypt() {
+_grub_set() {
   local \
-    _uuid="${1}" \
-    _label="${2}" \
-    _retries="${3}" \
-    _attempt=1 \
-    _decrypt_cmd=()
-  [[ "${_retries}" == "" ]] && \
-    _retries="3"
-  _decrypt_cmd=(
+    _field="${1}" \
+    _uuid="${2}" \
+    _cmd=()
+  _cmd=(
+    'set'
+      "${_field}=\"$( \
+        _get \
+          "${_field}" \
+          "${_uuid}")\";"
+  )
+  echo \
+    "${_cmd[*]}"
+}
+
+_boot_params() {
+  for _field \
+    in "kernel" \
+       "initrd" \
+       "key" \
+       "ksum" \
+       "isum"; do
+    _grub_set \
+      "${_field}" \
+      "${_uuid}"
+  done
+}
+
+_encrypted_mount_cmd() {
+  local \
+    _field \
+    _cmd=()
+  _cmd=(
     'if [ test -e "(crypto0)" ]; then'
       'set'
         'disk="(crypto0)";'
     "else"
       "echo"
-        "'Enter passphrase for device';"
+        "'Enter passphrase for device (attempt ${_attempt})';"
       "echo"
         "'${_label} (${_uuid})';"
       'cryptomount'
@@ -398,91 +422,155 @@ _decrypt() {
         "\"${_label} (${_uuid})\";"
       'echo'
         "'correctly mounted.';"
+  )
+  _cmd+=( "$( \
+    _boot_params)"
+  )
+  _cmd+=(
     "else"
        'echo' 
          "'Device not found or incorrect passphrase/key.';"
     "fi;"
   )
+  echo \
+    "${_cmd[*]}"
+}
+
+_encrypted_mount() {
+  local \
+    _uuid="${1}" \
+    _label="${2}" \
+    _retries="${3}" \
+    _attempt=1
+  [[ "${_retries}" == "" ]] && \
+    _retries="3"
   while (( "${_attempt}" < "${_retries}" )); do
     echo \
-      "${_decrypt_cmd[*]}"
+      "$(_encrypted_mount_cmd)"
     _attempt+=1
   done
 }
 
+_unencrypted_mount() {
+  local \
+    _uuid="${1}" \
+    _label="${2}" \
+    _cmd=()
+  _cmd=(
+    "echo"
+      "'Mounting device';"
+    "echo"
+      "'${_label} (${_uuid})';"
+    'search'
+      '--no-floppy'
+      '--set=root'
+      '--fs-uuid'
+      "'${_uuid}';"
+    "$(_boot_params)"
+  )
+  echo \
+    "${_cmd[*]}"
+}
+
+_menuentry() {
+  local \
+    _entry_name="${1}" \
+    _id="${2}" \
+    _body="${3}" \
+    _entry=()
+  _entry=(
+    'menuentry'
+      "\'${_entry_name}\'"
+      '--class'
+        'arch'
+      '--class'
+        'gnu-linux'
+      '--class'
+        'gnu'
+      '--class'
+        'os'
+      '--id'
+        "'${_id}'"
+    '{'
+    "${_body}"
+    '}'
+  )
+  echo \
+    "${_entry[*]}"
+}
+
 _mount() {
   local \
-    _ciao 
-  echo ciao
+    _type="${1}" \
+    _retries="${2}"
+  for _uuid \
+    in $( \
+      _get \
+        "${_type}" \
+        "uuids"); do
+    echo \
+      "$( \
+        "_${_type}_mount" \
+          "${_uuid}" \
+          "$( \
+            _get \
+              "name" \
+              "${_uuid}")" \
+          "${_retries}")"
+  done
 }
 
 # shellcheck disable=SC2016
 # shellcheck disable=SC1083
-_make_entry() {
+_make_grub_cfg() {
   local \
     _entry_name="${1}" \
     _short_entry="${2}" \
     _arch="${3}" \
-    _entry_line=() \
+    _entry_body=() \
     _entry_header=() \
-    _decrypt_cmd=() \
-    _decrypt_loop=() \
-    _encrypted_devices_loop=() \
-    _unencrypted_devices_loop=() \
+    _mount_block=() \
+    _linux_line=() \
+    _initrd_line=() \
     _tmp_cfg
   _tmp_cfg="$(mktemp)"
-  _entry_line=(
-    'menuentry'
-      "\'${_short_entry} (${_arch})\'"
-    '--class'
-      'arch'
-    '--class'
-      'gnu-linux'
-    '--class'
-      'gnu'
-    '--class'
-      'os'
-    '--id'
-      "'${_short_name}'"
-    '{'
-  )
   _entry_header=(
     'set'
       'gfxpayload=keep;'
   )
-  _decrypt_loop=(
-    # "${_decrypt_cmd[@]}"
-  )
-  _encrypted_devices_loop=(
-    'for _uuid'
-      'in "${_boot_uuids[@]}"; do'
-      "${_decrypt_loop[@]}"
-    'done;'
-  )
-  _unencrypted_devices_loop=(
-    'for _uuid'
-      'in "${_boot_uuids[@]}"; do'
-      'search'
-        '--no-floppy'
-	'--set=root'
-	'--fs-uuid'
-	  '"${_uuid}";'
-    'done;'
+  _mount_block=(
+    "$( \
+      _mount \
+        "encrypted" \
+        3)"
+    "$( \
+      _mount \
+        "unencrypted" \
+        "")"
   )
   _linux_line=(
     'linux'
-      '"${disk}"'"${_kernel}"
+      '"${disk}${_kernel}"'
          "${_kernel_params};"
   )
   _initrd_line=(
     'initrd'
-      '"${disk}"'"${_kernel};"
+      '"${disk}${initrd}";'
   )
+  _entry_body=(
+    "${_entry_header[@]}"
+    "${_mount_block[@]}"
+    "${_linux_line[@]}"
+    "${_initrd_line[@]}"
+    )
+  _entry=( "$( \
+    _menuentry \
+    "${_entry_name} (${_arch})" \
+    "${_short_name}" \
+    "${_entry_body}")" )
   printf \
-    "%s\n  %s\n  %s" \
-    "${_entry_header[*]}" \
-    "${_encrypted_devices_loop[*]}" \
-    "${_unencrypted_devices_loop[*]}" > \
+    "%s\n" \
+    "${_entry[*]}" > \
     "${_tmp_cfg}"
   #cat \
   #  "${_tmp_cfg}"
@@ -491,7 +579,6 @@ _make_entry() {
     -w "${_tmp_cfg}"
   cat \
     "${_tmp_cfg}"
- 
 }
 
 # Set defaults and, if present, overrides
@@ -513,7 +600,7 @@ _set_overrides() {
     "arch" \
     "name" \
     "x86_64"
-  boot_uuids+=(
+  unencrypted_uuids+=(
     'memdisk'
   )
   _set \
@@ -690,8 +777,7 @@ _display_devices() {
 # Shows configuration options.
 _show_config() {
   local \
-    _build_date \
-    _boot_uuids=()
+    _build_date
   # shellcheck disable=SC2207
   _out_file="$( \
     _get \
@@ -715,7 +801,7 @@ _show_config() {
   _display_devices                "true"  "${encrypted_uuids[@]}"
   _msg_info "       Unencrypted drives:"
   _msg_info ""
-  _display_devices               "false"  "${boot_uuids[@]}"
+  _display_devices               "false"  "${unencrypted_uuids[@]}"
   _msg_info "              Output file:   ${_out_file}"
 }
 
@@ -788,7 +874,7 @@ while \
          "${_uuid}"
        );;
     u) _uuid="${OPTARG}" && \
-       boot_uuids+=(
+       unencrypted_uuids+=(
 	 "${_uuid}"
        );;
     K) kernel[${_uuid}]="${OPTARG}";;
@@ -832,9 +918,18 @@ shift \
 
 _set_overrides
 _show_config
-# _make_entry \
-#   "${_entry_name}" \
-#   "${_short_name}" \
-#   "${_arch}"
+_make_grub_cfg \
+  "$( \
+    _get \
+      "entry" \
+      "name")" \
+  "$( \
+    _get \
+      "short" \
+      "name")" \
+  "$( \
+    _get \
+      "arch" \
+      "name")"
 
 # vim:set sw=2 sts=-1 et:
