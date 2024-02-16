@@ -448,8 +448,7 @@ _encrypted_mount() {
   [[ "${_retries}" == "" ]] && \
     _retries="3"
   while (( "${_attempt}" <= "${_retries}" )); do
-    echo \
-      "$(_encrypted_mount_cmd)"
+    _encrypted_mount_cmd
     _attempt=$(( _attempt + 1))
   done
 }
@@ -513,15 +512,13 @@ _mount() {
       _get \
         "${_type}" \
         "uuids"); do
-    echo \
+    "_${_type}_mount" \
+      "${_uuid}" \
       "$( \
-        "_${_type}_mount" \
-          "${_uuid}" \
-          "$( \
-            _get \
-              "name" \
-              "${_uuid}")" \
-          "${_retries}")"
+        _get \
+          "name" \
+          "${_uuid}")" \
+      "${_retries}"
   done
 }
 
