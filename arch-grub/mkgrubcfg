@@ -578,9 +578,14 @@ _make_grub_cfg() {
   echo \
     "${_entry_body[@]}" > \
     "${_tmp_cfg}"
-  shfmt \
-    -l \
-    -w "${_tmp_cfg}"
+  [[ \
+    "$( \ 
+      command \
+        -v \
+        "shfmt")" != "" ]] && \
+    shfmt \
+      -l \
+      -w "${_tmp_cfg}"
   _entry="$( \
     _menuentry \
     "${_entry_name} (${_arch})" \
