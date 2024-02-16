@@ -572,11 +572,9 @@ _make_grub_cfg() {
   echo \
     "${_entry_body[@]}" > \
     "${_tmp_cfg}"
-  [[ \
-    "$( \ 
-      command \
+  [[ command \
         -v \
-        "shfmt")" != "" ]] && \
+        "shfmt" != "" ]] && \
     shfmt \
       -l \
       -w "${_tmp_cfg}"
