@@ -414,10 +414,7 @@ _encrypted_mount_cmd() {
       "echo"
         "'${_label} (${_uuid})';"
       'cryptomount'
-        "$( \
-          echo \
-            "${_uuid}" | \
-          sed "s|-||g");"
+        "${_uuid//-/};"
     'fi;'
     'if [ test -e "(crypto0)" ]; then'
       'set'
