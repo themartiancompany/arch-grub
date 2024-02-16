@@ -459,16 +459,20 @@ _unencrypted_mount() {
     _label="${2}" \
     _cmd=()
   _cmd=(
-    "echo"
-      "'Mounting device';"
-    "echo"
-      "'${_label} (${_uuid})';"
-    'search'
-      '--no-floppy'
-      '--set=root'
-      '--fs-uuid'
-      "'${_uuid}';"
-    "$(_boot_params)"
+    'if [ "${root}" == "memdisk" ]; then'
+      "echo"
+        "'Mounting device';"
+      "echo"
+        "'${_label} (${_uuid})';"
+      'search'
+        '--no-floppy'
+        '--set=root'
+        '--fs-uuid'
+        "'${_uuid}';"
+    'fi;'
+    'if [ "${root}" != "memdisk" ]; then'
+      "$(_boot_params)"
+    'fi;'
   )
   echo \
     "${_cmd[*]}"
@@ -482,7 +486,7 @@ _menuentry() {
     _entry=()
   _entry=(
     'menuentry'
-      "\'${_entry_name}\'"
+      "'${_entry_name}'"
       '--class'
         'arch'
       '--class'
@@ -624,11 +628,11 @@ _set_overrides() {
   _set \
     "kernel" \
     "memdisk" \
-    "/vmlinuz"
+    "/boot/vmlinuz-linux"
   _set \
     "initrd" \
     "memdisk" \
-    "/initrd.img"
+    "/boot/initramfs-linux.img"
   _set \
     "ksum" \
     "memdisk" \
