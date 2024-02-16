@@ -589,8 +589,10 @@ _make_grub_cfg() {
     "%s\n" \
     "${_entry}" > \
     "${_tmp_cfg}"
-  cat \
-    "${_tmp_cfg}"
+  _sho \
+    "$( \
+      cat \
+        "${_tmp_cfg}")"
 }
 
 # Set defaults and, if present, overrides
