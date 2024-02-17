@@ -451,8 +451,10 @@ _efi_modules() {
 
 
 _modules() {
-  _disk_modules
-  _efi_modules
+  _format \
+    "$( \
+      _disk_modules && \
+      _efi_modules)"
 }
 
 _grub_set() {
@@ -496,19 +498,20 @@ _encrypted_mount_cmd() {
       "echo"
         "'Enter passphrase for device (attempt ${_attempt})';"
       "echo"
-        "'${_label} (${_uuid})';"
+        '"'"${_label} (${_uuid})"'";'
       'cryptomount'
-        "${_uuid//-/};"
+        '"'"${_uuid//-/}"'";'
     'fi;'
     'if [ test -e "(crypto0)" ]; then'
+      'echo'
+        '"Device";'
+      'echo' 
+        '"'"${_label} (${_uuid})"'";'
+      'echo'
+        '"correctly mounted.";'
       'set'
         'disk="(crypto0)";'
-      'echo'
-        "'Device';"
-      'echo' 
-        "\"${_label} (${_uuid})\";"
-      'echo'
-        "'correctly mounted.';"
+
   )
   _cmd+=( "$( \
     _set_boot_params)"
@@ -516,7 +519,7 @@ _encrypted_mount_cmd() {
   _cmd+=(
     "else"
        'echo' 
-         "'Device not found or incorrect passphrase/key.';"
+         '"Device not found or incorrect passphrase/key.";'
     "fi;"
   )
   echo \
@@ -545,7 +548,7 @@ _unencrypted_mount() {
   _cmd=(
     'if [ "${root}" == "memdisk" ]; then'
       "echo"
-        "'Mounting device';"
+        '"Mounting device;"'
       "echo"
         "'${_label} (${_uuid})';"
       'search'
@@ -560,6 +563,41 @@ _unencrypted_mount() {
   )
   echo \
     "${_cmd[*]}"
+}
+
+__format() {
+  local \
+    _code="${1}" \
+    _tmp;
+  if [[ $(command \
+        -v \
+        "shfmt") != "" ]]; then
+    _tmp="$( \
+      mktemp)";
+    echo \
+      "${_code}" > \
+      "${_tmp}";
+    shfmt \
+      -l \
+      -w "${_tmp}";
+    _code="$( \
+      cat \
+        "${_tmp}")";
+  fi
+  echo \
+    "${_code}"
+}
+
+_format() {
+  local \
+    _code="${1}"
+  echo \
+    "$( \
+      __format \
+        "${_code}" | \
+        tail \
+          -n \
+          +2)"
 }
 
 _menuentry() {
@@ -585,8 +623,10 @@ _menuentry() {
   )
   echo \
     "${_entry[*]}"
-  echo \
-    "${_body}"
+  _format \
+    "${_body}" | \
+    sed \
+      "s/^/\t/"
   echo \
     "}"
 }
@@ -610,24 +650,72 @@ _mount() {
   done
 }
 
+_shutdown() {
+  local \
+    _entry=()
+  _header=(
+    'menuentry'
+      '"System shutdown"'
+      '--class'
+        'shutdown'
+      '--class'
+        'poweroff' '{'
+  )
+  _body=(
+    'echo'
+      '"System shutting down...";'
+    'halt;'
+  )
+  echo \
+    "${_header[*]}"
+  _format \
+    "${_body[*]}" | \
+    sed \
+      "s/^/\t/"
+  echo \
+    '}'
+}
+
+_restart() {
+  local \
+    _entry=()
+  _header=(
+    'menuentry'
+      '"System restart"'
+      '--class'
+        'reboot'
+      '--class'
+        'restart' '{'
+  )
+  _body=(
+    'echo'
+      '"System rebooting...";'
+    'reboot;'
+  )
+  echo \
+    "${_header[*]}"
+  _format \
+    "${_body[*]}" | \
+    sed \
+      "s/^/\t/"
+  echo \
+    '}'
+}
+
 # shellcheck disable=SC2016
 # shellcheck disable=SC1083
-_make_grub_cfg() {
+_make_menuentry() {
   local \
     _entry_name="${1}" \
     _short_entry="${2}" \
     _arch="${3}" \
-    _out_file="${4}" \
     _entry \
-    _entry_body=() \
-    _entry_header=() \
+    _body=() \
+    _header=() \
     _mount_block=() \
-    _linux_line=() \
-    _initrd_line=() \
-    _tmp_cfg
-  _tmp_cfg="$( \
-    mktemp)"
-  _entry_header=(
+    _kernel=() \
+    _initrd=()
+  _header=(
     'set'
       'gfxpayload=keep;'
   )
@@ -641,7 +729,7 @@ _make_grub_cfg() {
         "unencrypted" \
         "")"
   )
-  _linux_line=(
+  _kernel=(
     'linux'
       '"${disk}${_kernel}"'
          "$( \
@@ -649,43 +737,67 @@ _make_grub_cfg() {
              "kparams" \
              "${_uuid}");"
   )
-  _initrd_line=(
+  _initrd=(
     'initrd'
       '"${disk}${initrd}";'
   )
-  _entry_body=(
+  _body=(
     "${_entry_header[@]}"
     "${_mount_block[@]}"
-    "${_linux_line[@]}"
-    "${_initrd_line[@]}"
+    "${_kernel[@]}"
+    "${_initrd[@]}"
   )
-  echo \
+  _menuentry \
+    "${_entry_name} (${_arch})" \
+    "${_short_entry}" \
+    "${_body[*]}"
+}
+
+_default_opts() {
+  local \
+    _opts=()
+  _opts=(
+    "default='${_short_entry}';"
+    "timeout=${_menu_timeout:-15};"
+    'timeout_style="menu";'
+  )
+  _format \
+    "${_opts[*]}"
+}
+
+# shellcheck disable=SC2016
+# shellcheck disable=SC1083
+_make_grub_cfg() {
+  local \
+    _entry_name="${1}" \
+    _short_entry="${2}" \
+    _arch="${3}" \
+    _out_file="${4}" \
+    _cfg
+  printf \
+    -v \
+      "_cfg" \
+    "%s\n%s\n%s\n%s\n%s" \
     "$( \
       _modules)" \
     "$( \
-      _menuentry \
-        "${_entry_name} (${_arch})" \
+      _default_opts)" \
+    "$( \
+      _make_menuentry \
+        "${_entry_name}" \
         "${_short_entry}" \
-        "${_entry_body[*]}")" > \
-    "${_tmp_cfg}"
-  [[ $(command \
-        -v \
-        "shfmt") != "" ]] && \
-    shfmt \
-      -l \
-      -w "${_tmp_cfg}"
+        "${_arch}")" \
+    "$( \
+      _shutdown)"  \
+    "$( \
+      _restart)"
   if [[ "${_out_file}" != "" ]]; then
-    printf \
-      "%s\n" \
-      "$( \
-        cat \
-          "${_tmp_cfg}")" > \
+    echo \
+      "${_cfg}"  > \
       "${_out_file}"
   elif [[ "${_out_file}" == "" ]]; then
     _sho \
-      "$( \
-        cat \
-          "${_tmp_cfg}")"
+      "${_cfg}"
   fi
 }
 
