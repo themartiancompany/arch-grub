@@ -584,7 +584,8 @@ __format() {
       cat \
         "${_tmp}")";
   fi
-  echo \
+  printf \
+    "\n%s" \
     "${_code}"
 }
 
@@ -921,17 +922,21 @@ _usage() {
       -d '' \
       _usage_text << \
         ENDUSAGETEXT || true
-usage: $(_get "app" "name")
-         [options]
-         -U <fssuid> (-u <fsuuid>)
-           [boot disk options]
+usage:
+  $(_get "app" "name")
+    [options]
+    -U
+      <fssuid>
+   (-u
+      <fsuuid>)
+   [boot disk options]
   options:
      -a <arch_name>       Architecture
-			  Default: '$(_get "arch" "name")'
+                          Default: '$(_get "arch" "name")'
      -L <entry_name>      Sets an alternative entry name
-			  Default: '$(_get "entry" "name")'
+                          Default: '$(_get "entry" "name")'
      -l <short_name>      Short entry name.
-			  Default: '$(_get "short" "name")'
+                          Default: '$(_get "short" "name")'
      -U <fsuuid>          Add an UUID for an encrypted boot disk.
      -u <fsuuid>          Add an UUID for an unencrypted boot disk.
      -o <out>             Output configuration file.
@@ -1103,9 +1108,7 @@ _sho() {
 
 _globals
 _global_variables
-
 _requirements
-
 # shellcheck disable=SC2004
 # shellcheck disable=SC2034
 while \
