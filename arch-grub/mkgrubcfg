@@ -371,6 +371,90 @@ _requirements() {
   fi
 }
 
+# Load partition table
+# and file system modules
+_disk_modules() {
+  local \
+    _cmd=()
+  _cmd=(
+    insmod
+      "part_gpt"
+      "part_msdos"
+      "fat"
+      "iso9660;"
+  )
+  [[ "$(_get "encrypted" "uuids")" != "" ]] && \
+    _cmd+=(
+      insmod 
+        "cryptodisk"
+        "luks2;"
+    )
+  echo \
+    "${_cmd[*]}"
+}
+
+# Use graphics-mode output
+_graphic_modules() {
+  local \
+    _cmd=()
+  _cmd=(
+    insmod 
+      "all_video"
+      "font;"
+    if loadfont
+         '"${prefix}/fonts/unicode.pf2"' ';' then
+      insmod
+        'gfxterm;'
+      set 
+        'gfxmode="auto";'
+      terminal_input
+        "console;"
+      terminal_output
+        "gfxterm;"
+    fi';'
+  )
+  echo \
+    "${_cmd[*]}"
+}
+
+# Enable serial console
+_serial_cfg() {
+  local \
+    _cmd=()
+  _cmd=(
+    if serial
+      --unit=0
+      --speed=115200';' then
+      terminal_input
+        --append serial';'
+      terminal_output
+        --append serial';'
+    fi';'
+  )
+  echo \
+    "${_cmd[*]}"
+}
+
+# EFI specific modules
+_efi_modules() {
+  local \
+    _cmd=()
+  _cmd=(
+    if [ '"${grub_platform}"' == "efi" ]';' then
+      "$(_graphic_modules)"
+      "$(_serial_cfg)"
+    fi';'
+  )
+  echo \
+    "${_cmd[*]}"
+}
+
+
+_modules() {
+  _disk_modules
+  _efi_modules
+}
+
 _grub_set() {
   local \
     _field="${1}" \
@@ -387,7 +471,7 @@ _grub_set() {
     "${_cmd[*]}"
 }
 
-_boot_params() {
+_set_boot_params() {
   for _field \
     in "kernel" \
        "initrd" \
@@ -427,7 +511,7 @@ _encrypted_mount_cmd() {
         "'correctly mounted.';"
   )
   _cmd+=( "$( \
-    _boot_params)"
+    _set_boot_params)"
   )
   _cmd+=(
     "else"
@@ -471,7 +555,7 @@ _unencrypted_mount() {
         "'${_uuid}';"
     'fi;'
     'if [ "${root}" != "memdisk" ]; then'
-      "$(_boot_params)"
+      "$(_set_boot_params)"
     'fi;'
   )
   echo \
@@ -574,9 +658,15 @@ _make_grub_cfg() {
     "${_mount_block[@]}"
     "${_linux_line[@]}"
     "${_initrd_line[@]}"
-    )
+  )
   echo \
-    "${_entry_body[@]}" > \
+    "$( \
+      _modules)" \
+    "$( \
+      _menuentry \
+        "${_entry_name} (${_arch})" \
+        "${_short_entry}" \
+        "${_entry_body[*]}")" > \
     "${_tmp_cfg}"
   [[ $(command \
         -v \
@@ -584,24 +674,19 @@ _make_grub_cfg() {
     shfmt \
       -l \
       -w "${_tmp_cfg}"
-  _entry="$( \
-    _menuentry \
-    "${_entry_name} (${_arch})" \
-    "${_short_entry}" \
-    "$( \
-      cat \
-        "${_tmp_cfg}")")"
-  [[ "${_out_file}" != "" ]] && \
-    _tmp_cfg="${_out_file}"
-  printf \
-    "%s\n" \
-    "${_entry}" > \
-    "${_tmp_cfg}"
-  [[ "${_out_file}" == "" ]] && \
+  if [[ "${_out_file}" != "" ]]; then
+    printf \
+      "%s\n" \
+      "$( \
+        cat \
+          "${_tmp_cfg}")" > \
+      "${_out_file}"
+  elif [[ "${_out_file}" == "" ]]; then
     _sho \
       "$( \
         cat \
           "${_tmp_cfg}")"
+  fi
 }
 
 # Set defaults and, if present, overrides
