@@ -533,7 +533,7 @@ _make_grub_cfg() {
     _entry_name="${1}" \
     _short_entry="${2}" \
     _arch="${3}" \
-    _out_file="${4}"
+    _out_file="${4}" \
     _entry \
     _entry_body=() \
     _entry_header=() \
@@ -541,7 +541,8 @@ _make_grub_cfg() {
     _linux_line=() \
     _initrd_line=() \
     _tmp_cfg
-  _tmp_cfg="$(mktemp)"
+  _tmp_cfg="$( \
+    mktemp)"
   _entry_header=(
     'set'
       'gfxpayload=keep;'
@@ -977,5 +978,9 @@ _make_grub_cfg \
   "$( \
     _get \
       "arch" \
-      "name")"
+      "name")" \
+  "$( \
+    _get \
+      "out" \
+      "file")"
 # vim:set sw=2 sts=-1 et:
