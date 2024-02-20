@@ -440,9 +440,10 @@ _serial_cfg() {
 _efi_modules() {
   local \
     _cmd=()
-  # shellcheck disable=SC2016
   _cmd=(
-    if '[ "${grub_platform}" == "efi" ]' ';' 'then'
+    if 
+      # shellcheck disable=SC2016
+      '[ "${grub_platform}" == "efi" ]' ';' 'then'
       "$(_graphic_modules)"
       "$(_serial_cfg)"
     fi';'
