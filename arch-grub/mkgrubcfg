@@ -393,6 +393,7 @@ _disk_modules() {
     "${_cmd[*]}"
 }
 
+# shellcheck disable=SC2016
 # Use graphics-mode output
 _graphic_modules() {
   local \
@@ -402,7 +403,7 @@ _graphic_modules() {
       "all_video"
       "font;"
     if loadfont
-         '"${prefix}/fonts/unicode.pf2"' ';' then
+         '"${prefix}/fonts/unicode.pf2"' ';' 'then'
       insmod
         'gfxterm;'
       set 
@@ -424,7 +425,7 @@ _serial_cfg() {
   _cmd=(
     if serial
       --unit=0
-      --speed=115200';' then
+      --speed=115200';' 'then'
       terminal_input
         --append serial';'
       terminal_output
@@ -440,7 +441,7 @@ _efi_modules() {
   local \
     _cmd=()
   _cmd=(
-    if [ '"${grub_platform}"' == "efi" ]';' then
+    if [ '"${grub_platform}"' == "efi" ]';' 'then'
       "$(_graphic_modules)"
       "$(_serial_cfg)"
     fi';'
@@ -540,13 +541,14 @@ _encrypted_mount() {
   done
 }
 
+# shellcheck disable=SC2016
 _unencrypted_mount() {
   local \
     _uuid="${1}" \
     _label="${2}" \
     _cmd=()
   _cmd=(
-    'if [ "${root}" == "memdisk" ]; then'
+    'if [ "${root}" == "memdisk" ]' ';' 'then'
       "echo"
         '"Mounting device;"'
       "echo"
