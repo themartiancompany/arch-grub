@@ -441,7 +441,7 @@ _efi_modules() {
   local \
     _cmd=()
   _cmd=(
-    if [ '"${grub_platform}"' == "efi" ]';' 'then'
+    if '[ "${grub_platform}" == "efi" ]' ';' 'then'
       "$(_graphic_modules)"
       "$(_serial_cfg)"
     fi';'
