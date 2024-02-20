@@ -594,13 +594,11 @@ __format() {
 _format() {
   local \
     _code="${1}"
-  echo \
-    "$( \
-      __format \
-        "${_code}" | \
-        tail \
-          -n \
-          +2)"
+  __format \
+    "${_code}" | \
+    tail \
+      -n \
+      +2
 }
 
 _menuentry() {
