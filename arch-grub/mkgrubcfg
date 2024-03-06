@@ -69,8 +69,8 @@ _global_variables() {
   short_name=""
   arch_name=""
   boot_method=""
-  unencrypted_uuids=()
-  encrypted_uuids=()
+  uuids_unencrypted=()
+  uuids_encrypted=()
   attributes=(
     key
     kernel
@@ -488,7 +488,7 @@ _set_boot_params() {
   done
 }
 
-_encrypted_mount_cmd() {
+_mount_encrypted_cmd() {
   local \
     _field \
     _cmd=()
@@ -528,7 +528,7 @@ _encrypted_mount_cmd() {
     "${_cmd[*]}"
 }
 
-_encrypted_mount() {
+_mount_encrypted() {
   local \
     _uuid="${1}" \
     _label="${2}" \
@@ -537,13 +537,13 @@ _encrypted_mount() {
   [[ "${_retries}" == "" ]] && \
     _retries="3"
   while (( "${_attempt}" <= "${_retries}" )); do
-    _encrypted_mount_cmd
+    _mount_encrypted_cmd
     _attempt=$(( _attempt + 1))
   done
 }
 
 # shellcheck disable=SC2016
-_unencrypted_mount() {
+_mount_unencrypted() {
   local \
     _uuid="${1}" \
     _label="${2}" \
@@ -642,7 +642,7 @@ _mount() {
       _get \
         "${_type}" \
         "uuids"); do
-    "_${_type}_mount" \
+    "_mount_${_type}" \
       "${_uuid}" \
       "$( \
         _get \
@@ -822,7 +822,7 @@ _set_overrides() {
     "arch" \
     "name" \
     "x86_64"
-  unencrypted_uuids+=(
+  uuids_unencrypted+=(
     'memdisk'
   )
   _set \
@@ -853,7 +853,7 @@ _set_overrides() {
     "kparams" \
     "memdisk" \
     ""
-  encrypted_uuids+=(
+  uuids_encrypted+=(
       'boot.img'
   )
   _set \
@@ -889,7 +889,7 @@ _set_overrides() {
     "boot.img" \
     ""
   for _uuid \
-    in "${encrypted_uuids[@]}"; do
+    in "${uuids_encrypted[@]}"; do
     [[ \
       "$( \
         _get \
@@ -1052,10 +1052,10 @@ _show_config() {
   _msg_info "               Short name:   $(_get "short" "name")"
   _msg_info "         Encrypted drives:"
   _msg_info ""
-  _display_devices                "true"  "${encrypted_uuids[@]}"
+  _display_devices                "true"  "${uuids_encrypted[@]}"
   _msg_info "       Unencrypted drives:"
   _msg_info ""
-  _display_devices               "false"  "${unencrypted_uuids[@]}"
+  _display_devices               "false"  "${uuids_unencrypted[@]}"
   _msg_info "              Output file:   ${_out_file}"
 }
 
@@ -1122,11 +1122,11 @@ while \
     L) override_entry_name="${OPTARG}" ;;
     l) override_short_name="${OPTARG}" ;;
     U) _uuid="${OPTARG}" && \
-       encrypted_uuids+=(
+       uuids_encrypted+=(
          "${_uuid}"
        );;
     u) _uuid="${OPTARG}" && \
-       unencrypted_uuids+=(
+       uuids_unencrypted+=(
 	 "${_uuid}"
        );;
     K) kernel[${_uuid}]="${OPTARG}";;

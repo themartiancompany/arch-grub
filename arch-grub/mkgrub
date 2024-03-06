@@ -590,6 +590,23 @@ _make_grub() {
     "boot/grub/grub.cfg=${_cfg}"
 }
 
+_get_grub_cfg() {
+  local \
+    _cfg
+  _cfg="$( \
+    _get \
+      "grub" \
+      "cfg")"
+  [[ "${_cfg}" != "" ]] || \
+    _cfg=$(mktemp) && \
+    mkgrubcfg > \
+      "${_cfg}" && \
+    _set \
+      "grub" \
+      "cfg" \
+      "${_cfg}"
+}
+
 # Build the GRUB binary
 _build() {
   [[ "${quiet}" == "y" ]] || \
