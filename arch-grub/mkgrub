@@ -63,18 +63,13 @@ _global_variables() {
   out=""
   grub_cfg=""
   plain_text=""
+  auto_cfg=""
   cfg_checksum=""
   entry_name=""
   short_name=""
   arch_name=""
   boot_method=""
   install_dir=""
-  boot_uuids=()
-  boot_keys=()
-  kernels=()
-  initrds=()
-  kernel_sums=()
-  initrd_sums=()
   color=""
   quiet=""
 }
@@ -415,6 +410,10 @@ _get_platform() {
     _platform="pc-eltorito"
   [[ "${_boot_method}" == "efi" ]] && \
     _platform="efi"
+  [[ "${_boot_method}" == "qemu" ]] && \
+    _platform="qemu"
+  [[ "${_boot_method}" == "uboot" ]] && \
+    _platform="qemu"
   echo \
     "${_platform}"
 }
@@ -512,32 +511,17 @@ _get_modules(){
     "${_modules[*]}"
 }
 
-# Fill a bootloader configuration template
-# and copy the result in a file
-# $1: bootloader configuration file
-#     (templatized, see profile directory)
-# $2: bootloader (empty?)
-_gen_bootloader_config() {
-  # TODO: To be rewritten
+_get_arch() {
   local \
-    _template="${1}" \
-    _cmd=()
-  _cmd=(
-    "s|%DEVICE_SELECT_CMDLINE%|$( \
-      _get_device_select_cmdline)|g;"
-    "s|%ARCH%|${arch_name}|g;"
-    "s|%BOOT_UUIDS%|${boot_uuids[@]}|g;"
-    "s|%INSTALL_DIR%|/${install_dir}|g;"
-    "s|%KERNEL_PARAMS%|$( \
-      _get_kernel_params)|g;"
-    "s|%BOOTABLE_UUID%|$( \
-     _get_bootable_uuid)|g;"
-    "s|%FALLBACK_UUID%|$( \
-     _get_archiso_uuid)|g"
-  )
-  sed \
-    "${_cmd[*]}" \
-    "${_template}"
+    _arch="${1}"
+  [[ "${_arch}" == "armv7h" ]] ||
+  [[ "${_arch}" == "arm" ]] ||
+  [[ "${_arch}" == "armv6l" ]] && \
+    _arch="arm"
+  [[ "${_arch}" == "aarch64" ]]  && \
+    _arch="arm64"
+  echo \
+    "${_arch}"
 }
 
 _out_name() {
@@ -545,10 +529,17 @@ _out_name() {
     _arch="${1}" \
     _boot_method="${2}" \
     _CODE
+  _CODE="${_arch}"
   [[ "${_arch}" == "i386" ]] && \
     _CODE="IA32"
   [[ "${_arch}" == "x86_64" ]] && \
     _CODE="x64"
+  [[ "${_arch}" == "armv7h" ]] ||
+  [[ "${_arch}" == "arm" ]] ||
+  [[ "${_arch}" == "armv6l" ]] && \
+    _CODE="ARM"
+  [[ "${_arch}" == "aarch64" ]]  && \
+    _CODE="ARM64"
   echo \
     "BOOT${_CODE}.$( \
       _upper \
@@ -569,6 +560,9 @@ _make_grub() {
   _options=() \
   _modules \
   _platform
+  _arch="$( \
+    _get_arch \
+      "${_arch}")"
   _platform="$( \
     _get_platform \
       "${_boot_method}")"
@@ -629,14 +623,25 @@ _set_overrides() {
     "cfg" \
     "checksum" \
     "true"
-  [[ "$(_get \
-          "plain" \
-	  "text")" == true ]] && \
-    _embed_cfg="-embed"
-  _override_path \
-    "grub" \
-    "cfg" \
-    "$(_get_cfg_path)/grub${_embed_cfg}.cfg"
+  [[ "$( \
+    _get \
+      "plain" \
+      "text")" == false ]] || \
+    _override_path \
+      "grub" \
+      "cfg" \
+      "$(_get_cfg_path)/grub-embed.cfg"
+  [[ "$( \
+    _get \
+      "grub" \
+      "cfg")" != "" ]] ||
+    _msg_info \
+      "No GRUB configuration file specified." \
+      "Automatic configuration enabled." &&
+    _set_override \
+      "auto" \
+      "cfg" \
+      "true"
   _set_override \
     "entry" \
     "name" \
@@ -648,7 +653,9 @@ _set_overrides() {
   _set_override \
     "arch" \
     "name" \
-    "x86_64"
+    "$( \
+      uname \
+        -m)"
   _set_override \
     "boot" \
     "method" \
@@ -663,7 +670,6 @@ _set_overrides() {
   elif [[ -z "${color}" ]]; then
     color="n"
   fi
-
 }
 
 # Show help usage, with an exit status.
@@ -740,38 +746,25 @@ _display_flags() {
 _show_config() {
   local \
     _build_date \
-    _boot_uuids=()
-  # shellcheck disable=SC2207
-  _boot_uuids=( $( \
-    _get \
-      "boot" \
-      "uuids")
-  )
-  [[ "${_boot_uuids[*]}" == "" ]] && \
-    _boot_uuids+=(
-      "GRUB drive"
-    )
+    _cfg
   TZ=UTC \
-    printf \
-      -v _build_date \
-      '%(%FT%R%z)T' \
-      "${SOURCE_DATE_EPOCH}"
+  printf \
+    -v _build_date \
+    '%(%FT%R%z)T' \
+    "${SOURCE_DATE_EPOCH}"
+  _cfg="$( \
+    _get \
+      "grub" \
+      "cfg")"
   _msg_info "${app_name} configuration"
-  _msg_info "               Build Date:   $(_get "_build" "date")"
-  _msg_info "       Configuration file:   $(_get "grub" "cfg")"
-  _msg_info " Plain-text configuration:   $(_get "plain" "text")"
-  _msg_info "             Architecture:   $(_get "arch" "name")"
-  _msg_info "               Entry name:   $(_get "entry" "name")"
-  _msg_info "               Short name:   $(_get "short" "name")"
-  _msg_info "              Boot Method:   $(_get "boot" "method")"
-  _msg_info "               Boot UUIDS:"
-  _display_flags                          "${_boot_uuids[*]}"
-  _msg_info "                  Kernels:"
-  _display_flags                          "${kernels[*]}"
-  _msg_info "                  Initrds:"
-  _display_flags                          "${initrds[*]}"
-  _msg_info "                Boot Keys:"
-  _display_flags                          "${boot_keys[*]}"
+  _msg_info "                     Build Date:   $(_get "_build" "date")"
+  _msg_info "             Configuration file:   ${_cfg:-Auto}"
+  _msg_info "       Plain-text configuration:   $(_get "plain" "text")"
+  _msg_info "  Configuration integrity check:   $(_get "plain" "text")"
+  _msg_info "                   Architecture:   $(_get "arch" "name")"
+  _msg_info "                     Entry name:   $(_get "entry" "name")"
+  _msg_info "                     Short name:   $(_get "short" "name")"
+  _msg_info "                    Boot Method:   $(_get "boot" "method")"
   _msg_info "              Output file:   ${out}"
 }
 
@@ -831,15 +824,15 @@ _requirements
 # shellcheck disable=SC2034
 while \
   getopts \
-    'C:gpa:b:rcvh?' \
+    'C:gpb:ra:cvh?' \
     arg; do
   case \
     "${arg}" in
     C) override_grub_cfg="${OPTARG}" ;;
-    g) override_auto_conf="true" ;;
-    p) override_plain_text="true" ;;
+    g) override_auto_cfg="true" ;;
+    p) override_plain_text="false" ;;
     b) override_boot_method="${OPTARG}" ;;
-    r) override_cfg_checksum="false" ;;
+    r) override_cfg_checksum="true" ;;
     a) override_arch_name="${OPTARG}" ;;
     c) override_color="y" ;;
     v) override_quiet="n" ;;
@@ -859,26 +852,27 @@ shift \
   $(( \
     OPTIND - 1 \
   ))
-(( ${#} == 0 )) && \
+(( ${#} != 0 )) || \
   out="$(pwd)"
-(( ${#} != 0 )) && \
+(( ${#} == 0 )) || \
   out="${1}"
 out="$( \
   realpath \
     -q -- \
     "${out}")"
 _set_overrides
-[ -d "${out}" ] && \
+if [ -d "${out}" ]; then
   out="${out}/$( \
     _out_name \
       "$( \
         _get \
-	  "arch" \
-	  "name")" \
+          "arch" \
+          "name")" \
       "$( \
         _get \
-	  "boot" \
-	  "method")")"
+          "boot" \
+          "method")")"
+fi
 shift \
   1
 # shellcheck disable=SC2034

@@ -1006,7 +1006,7 @@ _display_devices() {
     _msg_info \
       "                     Name:     ${_display_name}"
     _msg_info \
-      "                     UUID:     ${_display_uuid}"
+      "                     UUID:     ${_display_uuid:-None}"
     [[ "${_encrypted}" == "true" ]] && \
       _msg_info \
         "                      Key:     ${_display_key:-Passphrase}"
