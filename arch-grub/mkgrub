@@ -634,10 +634,10 @@ _set_overrides() {
   [[ "$( \
     _get \
       "grub" \
-      "cfg")" != "" ]] ||
+      "cfg")" != "" ]] || \
     _msg_info \
       "No GRUB configuration file specified." \
-      "Automatic configuration enabled." &&
+      "Automatic configuration enabled." && \
     _set_override \
       "auto" \
       "cfg" \
