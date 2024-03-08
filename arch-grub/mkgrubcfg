@@ -383,7 +383,7 @@ _disk_modules() {
       "fat"
       "iso9660;"
   )
-  [[ "$(_get "encrypted" "uuids")" != "" ]] && \
+  [[ "$(_get "uuids" "encrypted")" != "" ]] && \
     _cmd+=(
       insmod 
         "cryptodisk"
@@ -640,8 +640,8 @@ _mount() {
   for _uuid \
     in $( \
       _get \
-        "${_type}" \
-        "uuids"); do
+        "uuids" \
+        "${_type}"); do
     "_mount_${_type}" \
       "${_uuid}" \
       "$( \
