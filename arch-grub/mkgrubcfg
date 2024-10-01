@@ -2,66 +2,23 @@
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-_globals() {
-  local \
-    _OLDPWD
-  set \
-    -e \
-    -u
-  shopt \
-    -s \
-      extglob
-  # Control the environment
-  umask \
-    0022
-  export \
-    LC_ALL="C.UTF-8"
-  # LC_ALL=C.UTF-8, unlike LC_ALL=C,
-  # does not override LANGUAGE.
-  # See 
-  # https://sourceware.org/bugzilla/show_bug.cgi?id=16621
-  # and 
-  # https://savannah.gnu.org/bugs/?62815
-  [[ -v LANGUAGE ]] && \
-    unset \
-      LANGUAGE
-  [[ -v SOURCE_DATE_EPOCH ]] || \
-    printf \
-      -v \
-        SOURCE_DATE_EPOCH \
-      '%(%s)T' \
-      -1
-  export \
-    SOURCE_DATE_EPOCH
-  
-  # Get script path
-  # shellcheck disable=SC2005
-  _path="$( \
-    _OLDPWD="$( \
-      pwd)" && \
-    export \
-      _OLDPWD && \
-    cd \
-      "$( \
-	dirname \
-          "${BASH_SOURCE[0]}")" && \
-    echo \
-      "$(pwd)" && \
-    cd \
-      "${_OLDPWD}" && \
-    unset \
-      _OLDPWD)"
-  unset \
-    _OLDPWD
-  # Set application name
-  # from the script's file name
-  app_name="${0##*/}"
-}
+
+_bin="$( \
+  dirname \
+    "$( \
+      command \
+        -v \
+	  "env")")"
+_lib="${_bin}/../lib"
+_share="${_bin}/../share"
+source \
+  "${_lib}/libcrash-bash/crash-bash"
 
 # shellcheck disable=SC2034
 _global_variables() {
   local \
     _field
+  build_date=""
   out_file=""
   grub_cfg=""
   cfg_checksum=""
@@ -91,284 +48,9 @@ _global_variables() {
   quiet=""
 }
 
-# Show an INFO message
-# $1: message string
-_msg_info() {
-  local \
-    _msg=(
-      "$@"
-    ) \
-    _fmt_line=() \
-    _line
-  [[ "${quiet}" == "y" ]] || \
-    for _line \
-      in "${_msg[@]}"; do
-      # _fmt_line+=(
-      #   "$( \
-      #     printf \
-      #       '[%s] INFO: %s\n' \
-      #       "${app_name}" \
-      #       "${_line}")"
-      # )
-      _printf \
-        '[%s] INFO: %s\n' \
-        "${app_name}" \
-        "${_line}"
-    done
-    # _printf \
-    #   "${_fmt_line[*]}"
-}
-
-# Show a WARNING message
-# $1: message string
-_msg_warning() {
-  local \
-    _msg=()
-  _msg=(
-    "${1}"
-  )
-  _printf \
-    '[%s] WARNING: %s\n' \
-    "${app_name}" \
-    "${_msg[*]}" >&2
-}
-
-# Show an ERROR message then exit with status
-# $1: message string
-# $2: exit code number (with 0 does not exit)
-_msg_error() {
-  local \
-    _msg=(
-      "${1}"
-    ) \
-    _error=${2}
-  _printf \
-    '[%s] ERROR: %s\n' \
-    "${app_name}" \
-    "${_msg[*]}" >&2
-  if (( _error > 0 )); then
-    exit "${_error}"
-  fi
-}
-
-# Sets object string attributes
-# $1: object
-# $2: an object string attribute
-# $3: a value
-_set() {
-  local \
-    _obj="${1}" \
-    _var="${2}" \
-    _value="${3}" \
-    _target \
-    _ass_target \
-    _ass_type
-  _target="${_obj}_${_var}"
-  _ass_target="${_obj}[${_var}]"
-  _ass_type="$( \
-    _get_type \
-      "${_obj}")"
-  [[ "${_ass_type}" == "dict" ]] && \
-    _target="${_ass_target}"
-  printf \
-    -v "${_target}" \
-    "%s" \
-    "${_value}"
-}
-
-# Returns type ('string', 'list', 'dict') given
-# its name
-# $1: an object
-_get_type() {
-  local \
-    _obj="${1}" \
-    _type="string" \
-    _declare
-  _declare="$( \
-    declare \
-      -p \
-        "${_obj}" 2>&1)"
-  [[ \
-    "${_declare}" == \
-    *"declare:"*"${_obj}"*": not found" ]] && \
-    _type="undefined"
-  [[ \
-    "${_declare}" == \
-    "declare -A "* ]] && \
-    _type="dict"
-  [[ \
-    "${_declare}" == \
-    "typeset -a"* ]] && \
-    _type="array"
-  echo \
-    "${_type}"
-}
-
-# Returns an attribute value for a 
-# given object
-# $1: an object
-# $2: an object attribute
-_get() {
-  local \
-    _obj="${1}" \
-    _var="${2}" \
-    _ass_target \
-    _ass_type \
-    _msg \
-    _ref \
-    _type \
-    _target
-  _ass_target="${_obj}"
-  _target="${_obj}_${_var}"
-  _ref="${_target}[@]"
-  _ass_ref="${_obj}[${_var}]"
-  _type="$( \
-    _get_type \
-      "${_target}")"
-  _ass_type="$( \
-    _get_type \
-      "${_ass_target}")"
-  [[ "${_type}" == "undefined" ]] && \
-  [[ "${_ass_type}" == "undefined" ]] && \
-  [[ ! -v "${_ass_ref}" ]] && \
-    _msg=(
-      "Attribute '${_var}' is not defined"
-      "for object '${_obj}'") && \
-    _msg_error \
-      "${_msg[*]}" \
-      1
-  [[ "${_ass_type}" == "dict" ]] && \
-    if [[ -v "${_ass_ref}" ]]; then
-      _ref="${_ass_ref}"
-    fi
-  printf \
-    "%s\n" \
-    "${!_ref}"
-}
-
-_check_cmd(){
-  local \
-    _cmd="${1}" \
-    _cmd_var \
-    _flag="" \
-    _pkgs=()
-  shift \
-    1
-  _pkgs=(
-    "$@"
-  )
-  _cmd_var="$( \
-    printf \
-      "%s" \
-      "${_cmd}" | \
-      sed \
-        "s/-/_/g")"
-  command \
-     -v \
-     "${_cmd}" &> /dev/null && \
-    printf \
-      -v \
-        "_${_cmd_var}" \
-      "%s" \
-      "$( \
-        command \
-          -v \
-          "${_cmd}")" && \
-    _flag=true
-  [ -e "${_path}/${_cmd}" ] && \
-    printf \
-      -v \
-        "_${_cmd_var}" \
-      "%s" \
-      "${_path}/${_cmd}" && \
-    _flag=true
-  if [[ "${_flag}" != "true" ]]; then
-    if [[ "${_pkgs[*]}" != "" ]]; then
-      _cmd="${_pkgs[*]}"
-    fi
-    _msg_error \
-      "Install ${_cmd}" \
-      1
-  fi
-}
-
-# Reassign an object variable
-# if an override variable is defined;
-# otherwise it defaults
-# to an input default.
-# $1: object
-# $2: variable
-# $3: default value
-_set_override() {
-  local \
-    _obj="${1}" \
-    _var="${2}" \
-    _default="${3}"
-  if [[ -v "override_${_obj}_${_var}" ]]; then
-    _set \
-      "${_obj}" \
-      "${_var}" \
-      "$( \
-        _get \
-	  "override_${_obj}" \
-          "${_var}")"
-  elif [[ -z \
-	    "$( \
-	      _get \
-	        "${_obj}" \
-                "${_var}")" ]]; then
-    _set \
-      "${_obj}" \
-      "${_var}" \
-      "${_default}"
-  fi
-}
-
-# Re-assign an object variable pointing to
-# a path if an override variable is defined,
-# otherwise it defaults to an input path
-# $1: object
-# $2: variable
-# $3: value (a path)
-_override_path() {
-  local \
-    _obj="${1}" \
-    _var="${2}" \
-    _value="${3}" \
-    _path
-  _path="$( \
-    realpath \
-      -q -- \
-      "${_value}" || \
-      true)"
-  [[ "${_path}" == "" ]] && \
-    _msg_error \
-      "${_value} is not a valid path." \
-      1
-  _set_override \
-    "${_obj}" \
-    "${_var}" \
-    "${_value}"
-  _set \
-    "${_obj}" \
-    "${_var}" \
-    "$( \
-      realpath -- \
-        "$( \
-	  _get \
-	    "${_obj}" \
-            "${_var}")")"
-}
-
 _requirements() {
-  if \
-    [[ "$( \
-      command \
-        -v \
-	  "shfmt")" == "" ]]; then
-    _msg_warning \
-      "'shfmt' not found, unindented output file."
-  fi
+  _check_cmd \
+    'shfmt'
 }
 
 # Load partition table
@@ -807,6 +489,10 @@ _make_grub_cfg() {
 # from arch-grub command line option parameters
 _set_overrides() {
   _set_override \
+    "build" \
+    "date" \
+    "$(_get_date_human)"
+  _set_override \
     "out" \
     "file" \
     ""
@@ -916,6 +602,7 @@ _set_overrides() {
 # $1: exit status number.
 _usage() {
   local \
+    _exit="${1}" \
     _usage_text
   IFS='' \
     read \
@@ -923,6 +610,9 @@ _usage() {
       -d '' \
       _usage_text << \
         ENDUSAGETEXT || true
+
+Produces a GRUB configuration file.
+
 usage:
   $(_get "app" "name")
     [options]
@@ -931,6 +621,7 @@ usage:
    (-u
       <fsuuid>)
    [boot disk options]
+
   options:
      -a <arch_name>       Architecture
                           Default: '$(_get "arch" "name")'
@@ -942,9 +633,11 @@ usage:
      -u <fsuuid>          Add an UUID for an unencrypted boot disk.
      -o <out>             Output configuration file.
                           Default: print to console
+
      -h                   This message.
      -c                   Enable color output
      -v                   Enable verbose output
+
   boot disk options:
      -n <name>            Boot disk nickname.
      -K <kernel>          Kernel path inside the boot disk.
@@ -962,7 +655,7 @@ ENDUSAGETEXT
     '%s\n' \
     "${_usage_text}"
   exit \
-    "${1}"
+    "${_exit}"
 }
 
 _display_flags() {
@@ -1030,8 +723,6 @@ _display_devices() {
 
 # Shows configuration options.
 _show_config() {
-  local \
-    _build_date
   # shellcheck disable=SC2207
   _out_file="$( \
     _get \
@@ -1040,13 +731,8 @@ _show_config() {
   [[ \
     "${_out_file}" == "" ]] && \
     _out_file="stdout"
-  TZ=UTC \
-    printf \
-      -v _build_date \
-      '%(%FT%R%z)T' \
-      "${SOURCE_DATE_EPOCH}"
   _msg_info "${app_name} configuration"
-  _msg_info "               Build Date:   $(_get "_build" "date")"
+  _msg_info "               Build Date:   $(_get "build" "date")"
   _msg_info "             Architecture:   $(_get "arch" "name")"
   _msg_info "               Entry name:   $(_get "entry" "name")"
   _msg_info "               Short name:   $(_get "short" "name")"
@@ -1057,54 +743,6 @@ _show_config() {
   _msg_info ""
   _display_devices               "false"  "${uuids_unencrypted[@]}"
   _msg_info "              Output file:   ${_out_file}"
-}
-
-# Colorized print
-_printf() {
-  local \
-    _args=()
-    _pygmentize_opts=()
-  _pygmentize_opts=(
-    -g
-    -O style=emacs
-  )
-  _args=(
-      "$@"
-  )
-  # shellcheck disable=SC2059
-  _sho \
-    "$( \
-      printf \
-        "${_args[@]}")" \
-    "${_pygmentize_opts[@]}"
-}
-
-# Colorized Display function
-_sho() {
-  local \
-    _text="${1}" \
-    _pygmentize
-  _pygmentize="$( \
-    command \
-      -v \
-      "pygmentize"{,2} | \
-      head \
-        -n \
-	1)"
-  shift
-  _pygmentize_opts=(
-    "$@"
-  )
-  [[ "${color}" == "y" ]] && \
-  [[ "${_pygmentize}" != "" ]] && \
-    echo \
-      "${_text}" | 
-      "${_pygmentize}" \
-        "${_pygmentize_opts[@]}" && \
-    return
-  printf \
-    "%s\n" \
-    "${_text}"
 }
 
 _globals
