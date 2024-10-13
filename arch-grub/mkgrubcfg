@@ -31,6 +31,7 @@ _global_variables() {
   attributes=(
     key
     kernel
+    ucode
     initrd
     ksum
     isum
@@ -485,6 +486,33 @@ _make_grub_cfg() {
   fi
 }
 
+_ucode_auto_detect() {
+  local \
+    _os \
+    _vendor \
+    _ucode
+  _os="$( \
+    uname \
+      -o)"
+  if [[ "${_os}" == "GNU/Linux" || \
+        "${_os}" == "Android" ]]; then
+    _vendor="$( \
+      lscpu | \
+        grep \
+          Vendor | \
+          awk \
+            '{print $NF}')"
+  fi
+  if [[ "${_vendor}" == "GenuineIntel" ]]; then
+    _ucode="intel-ucode.img"
+  elif [[ "${_vendor}" == "AMDisbetter!" || \
+          "${_vendor}" == "AuthenticAMD" ]]; then
+    _ucode="amd-ucode.img"
+  fi
+  echo \
+    "${_ucode}"
+}
+
 # Set defaults and, if present, overrides
 # from arch-grub command line option parameters
 _set_overrides() {
@@ -520,6 +548,10 @@ _set_overrides() {
     "memdisk" \
     "/boot/vmlinuz-linux"
   _set \
+    "ucode" \
+    "memdisk" \
+    "/boot/$(_ucode_auto_detect)"
+  _set \
     "initrd" \
     "memdisk" \
     "/boot/initramfs-linux.img"
@@ -553,7 +585,7 @@ _set_overrides() {
   _set \
     "kernel" \
     "boot.img" \
-    "vmlinuz"
+    "/vmlinuz-linux"
   _set \
     "ksum" \
     "boot.img" \
@@ -563,9 +595,13 @@ _set_overrides() {
     "boot.img" \
     ""
   _set \
+    "ucode" \
+    "memdisk" \
+    "/$(_ucode_auto_detect)"
+  _set \
     "initrd" \
     "boot.img" \
-    "initrd.img"
+    "/initramfs-linux.img"
   _set \
     "drive" \
     "boot.img" \
@@ -576,15 +612,38 @@ _set_overrides() {
     ""
   for _uuid \
     in "${uuids_encrypted[@]}"; do
-    [[ \
-      "$( \
-        _get \
-          "key" \
-          "${_uuid}")" == "" ]] &&  \
+    if [[ "$(_get \
+            "key" \
+            "${_uuid}")" == "" ]]; then
       _set \
         "key" \
         "${_uuid}" \
-        "/boot.key"
+        "boot.key"
+    fi
+    if [[ "$(_get \
+            "kernel" \
+            "${_uuid}")" == "" ]]; then
+      _set \
+        "kernel" \
+        "${_uuid}" \
+        "/vmlinuz-linux"
+    fi
+    if [[ "$(_get \
+            "initramfs" \
+            "${_uuid}")" == "" ]]; then
+      _set \
+        "initrd" \
+        "${_uuid}" \
+        "/initramfs-linux.img"
+    fi
+    if [[ "$(_get \
+            "ucode" \
+            "${_uuid}")" == "" ]]; then
+      _set \
+        "ucode" \
+        "${_uuid}" \
+        "/$(_ucode_auto_detect)"
+    fi
   done
   if [[ -v override_quiet ]]; then
     quiet="${override_quiet}"
@@ -708,6 +767,8 @@ _display_devices() {
     _msg_info \
       "                   Initrd:     ${_display_initrd}"
     _msg_info \
+      "               Micro code:     ${_display_ucode}"
+    _msg_info \
       "          Kernel checksum:     ${_display_ksum:-None}"
     _msg_info \
       "          Initrd checksum:     ${_display_isum:-None}"
@@ -752,7 +813,7 @@ _requirements
 # shellcheck disable=SC2034
 while \
   getopts \
-    'a:L:l:U:u:K:k:I:i:n:e:t:p:o:cvh?' \
+    'a:L:l:U:u:K:k:m:I:i:n:e:t:p:o:cvh?' \
     arg; do
   case \
     "${arg}" in
@@ -769,6 +830,7 @@ while \
        );;
     K) kernel[${_uuid}]="${OPTARG}";;
     k) ksum[${_uuid}]="${OPTARG}";;
+    m) ucode[${_uuid}]="${OPTARG}" ;;
     I) initrd[${_uuid}]="${OPTARG}";;
     i) isum[${_uuid}]="${OPTARG}";;
     n) name[${_uuid}]="${OPTARG}";;  
