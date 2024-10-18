@@ -159,6 +159,8 @@ _grub_set() {
 }
 
 _set_boot_params() {
+  local \
+    _field
   for _field \
     in "kernel" \
        "initrd" \
@@ -414,9 +416,16 @@ _make_menuentry() {
         "unencrypted" \
         "")"
   )
+  _checksum=(
+    'hashsum'
+      '--hash'
+        'sha256'
+      '--check'
+        '"(memdisk)/${ksum}"'
+  )
   _kernel=(
     'linux'
-      '"${disk}${_kernel}"'
+      '"${disk}${kernel}"'
          "$( \
            _get \
              "kparams" \
@@ -429,6 +438,7 @@ _make_menuentry() {
   _body=(
     "${_entry_header[@]}"
     "${_mount_block[@]}"
+    "${_checksum[@]}"
     "${_kernel[@]}"
     "${_initrd[@]}"
   )

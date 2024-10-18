@@ -2,61 +2,17 @@
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-_globals() {
-  local \
-    _OLDPWD
-  set \
-    -e \
-    -u
-  shopt \
-    -s \
-      extglob
-  # Control the environment
-  umask \
-    0022
-  export \
-    LC_ALL="C.UTF-8"
-  # LC_ALL=C.UTF-8, unlike LC_ALL=C,
-  # does not override LANGUAGE.
-  # See 
-  # https://sourceware.org/bugzilla/show_bug.cgi?id=16621
-  # and 
-  # https://savannah.gnu.org/bugs/?62815
-  [[ -v LANGUAGE ]] && \
-    unset \
-      LANGUAGE
-  [[ -v SOURCE_DATE_EPOCH ]] || \
-    printf \
-      -v \
-        SOURCE_DATE_EPOCH \
-      '%(%s)T' \
-      -1
-  export \
-    SOURCE_DATE_EPOCH
-  
-  # Get script path
-  # shellcheck disable=SC2005
-  _path="$( \
-    _OLDPWD="$( \
-      pwd)" && \
-    export \
-      _OLDPWD && \
-    cd \
-      "$( \
-	dirname \
-          "${BASH_SOURCE[0]}")" && \
-    echo \
-      "$(pwd)" && \
-    cd \
-      "${_OLDPWD}" && \
-    unset \
-      _OLDPWD)"
-  unset \
-    _OLDPWD
-  # Set application name
-  # from the script's file name
-  app_name="${0##*/}"
-}
+
+_bin="$( \
+  dirname \
+    "$( \
+      command \
+        -v \
+	  "env")")"
+_lib="${_bin}/../lib"
+_share="${_bin}/../share"
+source \
+  "${_lib}/libcrash-bash/crash-bash"
 
 # shellcheck disable=SC2034
 _global_variables() {
@@ -570,7 +526,8 @@ _make_grub() {
     _get_modules \
       "${_platform}")"
   _options=(
-    -O "${_arch}-${_platform}"
+    -O 
+      "${_arch}-${_platform}"
     --modules="${_modules}"
     --locales="en@quot"
     --themes=""
@@ -587,7 +544,9 @@ _make_grub() {
     -o "${_out}")
   grub-mkstandalone \
     "${_options[@]}" \
-    "boot/grub/grub.cfg=${_cfg}"
+    "boot/grub/grub.cfg=${_cfg}" \
+    "${_ksum}" \
+    "${_isum}"
 }
 
 _get_grub_cfg() {
@@ -605,26 +564,6 @@ _get_grub_cfg() {
       "grub" \
       "cfg" \
       "${_cfg}"
-}
-
-# Build the GRUB binary
-_build() {
-  [[ "${quiet}" == "y" ]] || \
-    _show_config
-  _make_grub \
-    "$( \
-      _get \
-        "boot" \
-        "method")" \
-    "$( \
-      _get \
-        "arch" \
-        "name")" \
-    "$( \
-      _get \
-        "grub" \
-        "cfg")" \
-    "${out}"
 }
 
 # Set defaults and, if present, overrides
@@ -713,7 +652,8 @@ usage: $(_get "app" "name") [options] <out_file>
 			  Default: '$(_get "plain" "text")'.
      -b <boot_method>     Boot method (mbr, eltorito, efi).
 			  Default: '$(_get "boot" "method")'
-     -a <arch_name>       Architecture
+     -a <arch_name>       Architecture ('aarch64', 'arm', 'armv7h',
+                                        'armv6', 'i386', 'x86_64')
 			  Default: '$(_get "arch" "name")'
      -r                   Disable configuration file integrity
                           check.
@@ -896,4 +836,19 @@ shift \
 mkgrubcfg_opts=(
   "$@"
 )
-_build
+app_opts=(
+  "$(_get \
+      "boot" \
+      "method")" \
+  "$(_get \
+      "arch" \
+      "name")" \
+  "$(_get \
+      "grub" \
+      "cfg")" \
+  "${out}"
+  "${mkgrubcfg_opts[@]}"
+)
+_show_config
+_mkgrub \
+  "${app_opts[@]}"
