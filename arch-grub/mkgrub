@@ -17,7 +17,7 @@ source \
 # shellcheck disable=SC2034
 _global_variables() {
   build_date=""
-  out=""
+  out_file=""
   grub_cfg=""
   plain_text=""
   auto_cfg=""
@@ -210,7 +210,7 @@ _get_arch() {
     "${_arch}"
 }
 
-_out_name() {
+_out_file_name() {
   local \
     _arch="${1}" \
     _boot_method="${2}" \
@@ -230,6 +230,10 @@ _out_name() {
     "BOOT${_CODE}.$( \
       _upper \
         "${_boot_method}")"
+}
+
+_out_file_auto_detect() {
+  pwd
 }
 
 # Produces a standalone GRUB binary
@@ -322,6 +326,10 @@ _set_overrides() {
     "cfg" \
     "checksum" \
     "true"
+  _set_override \
+    "out" \
+    "file" \
+    "$(_out_file_auto_detect)"
   if [[ "$( \
     _get \
       "plain" \
@@ -465,10 +473,11 @@ _requirements
 # shellcheck disable=SC2034
 while \
   getopts \
-    'C:gpb:ra:cvh?' \
+    'o:C:gpb:ra:cvh?' \
     arg; do
   case \
     "${arg}" in
+    o) override_out_file="${OPTARG}" ;;
     C) override_grub_cfg="${OPTARG}" ;;
     g) override_auto_cfg="true" ;;
     p) override_plain_text="false" ;;
@@ -493,23 +502,19 @@ shift \
   $(( \
     OPTIND - 1 \
   ))
-(( ${#} != 0 )) || \
-  out="$(pwd)"
-(( ${#} == 0 )) || \
-  out="${1}"
-out="$( \
-  realpath \
-    -q -- \
-    "${out}")"
 shift \
   1
 mkgrubcfg_opts=(
   "$@"
 )
 _set_overrides
-if [ -d "${out}" ]; then
-  out="${out}/$( \
-    _out_name \
+out_file="$( \
+  realpath \
+    -q -- \
+    "${out_file}")"
+if [ -d "${out_file}" ]; then
+  out_file="${out_file}/$( \
+    _out_file_name \
       "$( \
         _get \
           "arch" \
@@ -529,7 +534,9 @@ app_opts=(
   "$(_get \
       "grub" \
       "cfg")" \
-  "${out}"
+  "$(_get \
+      "out" \
+      "file")"
 )
 _show_config
 _make_grub \
