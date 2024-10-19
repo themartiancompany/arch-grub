@@ -16,6 +16,7 @@ source \
 
 # shellcheck disable=SC2034
 _global_variables() {
+  build_date=""
   out=""
   grub_cfg=""
   plain_text=""
@@ -26,6 +27,7 @@ _global_variables() {
   arch_name=""
   boot_method=""
   install_dir=""
+  mkgrubcfg_opts=()
   color=""
   quiet=""
 }
@@ -42,29 +44,13 @@ _get_script_dir() {
         "${BASH_SOURCE[0]}")"
 }
 
-_get_sysbin() {
- dirname \
-  "$( \
-    command \
-     -v \
-     "$( \
-       _get \
-         "app"\
-	 "name")")"
-}
-
-_get_sysusr() {
- dirname \
-  "$(_get_sysbin)"
-}
-
 _get_cfg_path() {
   local \
     _sys_path \
     _local_path \
     _path
   _sys_path="$( \
-    _get_sysusr)/lib/$( \
+    _get_usr)/lib/$( \
       _get \
         "app" \
 	"name")/configs"
@@ -293,21 +279,30 @@ _make_grub() {
     "${_isum}"
 }
 
-_get_grub_cfg() {
+_grub_cfg_auto_detect() {
   local \
+    _tmp_dir \
+    _mkgrubcfg_opts=() \
     _cfg
-  _cfg="$( \
-    _get \
-      "grub" \
-      "cfg")"
-  [[ "${_cfg}" != "" ]] || \
-    _cfg=$(mktemp) && \
-    mkgrubcfg > \
-      "${_cfg}" && \
-    _set \
-      "grub" \
-      "cfg" \
-      "${_cfg}"
+  _tmp_dir="$( \
+    mktemp \
+      -d)"
+  _cfg="${_tmp_dir}/grub.cfg"
+  if [[ "${quiet}" == "n" ]];
+    _mkgrubcfg_opts+=(
+      -v
+    )
+  fi
+  _mkgrubcfg_opts+=(
+    "${mkgrubcfg_opts[@]}"
+  )
+  mkgrubcfg \
+    "${_mkgrubcfg_opts[@]}" > \
+    "${_cfg}"
+  _set \
+    "grub" \
+    "cfg" \
+    "${_cfg}"
 }
 
 # Set defaults and, if present, overrides
@@ -316,6 +311,10 @@ _set_overrides() {
   local \
     _embed_cfg=""
   _set_override \
+    "build" \
+    "date" \
+    "$(_get_date_human)"
+  _set_override \
     "plain" \
     "text" \
     "false"
@@ -323,25 +322,15 @@ _set_overrides() {
     "cfg" \
     "checksum" \
     "true"
-  [[ "$( \
+  if [[ "$( \
     _get \
       "plain" \
-      "text")" == false ]] || \
+      "text")" == true ]]; then
     _override_path \
       "grub" \
       "cfg" \
       "$(_get_cfg_path)/grub-embed.cfg"
-  [[ "$( \
-    _get \
-      "grub" \
-      "cfg")" != "" ]] || \
-    _msg_info \
-      "No GRUB configuration file specified." \
-      "Automatic configuration enabled." && \
-    _set_override \
-      "auto" \
-      "cfg" \
-      "true"
+  fi
   _set_override \
     "entry" \
     "name" \
@@ -369,6 +358,11 @@ _set_overrides() {
     color="${override_color}"
   elif [[ -z "${color}" ]]; then
     color="n"
+  fi
+  if [[ "$(_get \
+             "grub" \
+             "cfg")" == "" ]]; then
+    _grub_cfg_auto_detect
   fi
 }
 
@@ -446,19 +440,13 @@ _display_flags() {
 # Shows configuration options.
 _show_config() {
   local \
-    _build_date \
     _cfg
-  TZ=UTC \
-  printf \
-    -v _build_date \
-    '%(%FT%R%z)T' \
-    "${SOURCE_DATE_EPOCH}"
   _cfg="$( \
     _get \
       "grub" \
       "cfg")"
   _msg_info "${app_name} configuration"
-  _msg_info "                     Build Date:   $(_get "_build" "date")"
+  _msg_info "                     Build Date:   $(_get "build" "date")"
   _msg_info "             Configuration file:   ${_cfg:-Auto}"
   _msg_info "       Plain-text configuration:   $(_get "plain" "text")"
   _msg_info "  Configuration integrity check:   $(_get "plain" "text")"
@@ -467,54 +455,6 @@ _show_config() {
   _msg_info "                     Short name:   $(_get "short" "name")"
   _msg_info "                    Boot Method:   $(_get "boot" "method")"
   _msg_info "              Output file:   ${out}"
-}
-
-# Colorized print
-_printf() {
-  local \
-    _args=()
-    _pygmentize_opts=()
-  _pygmentize_opts=(
-    -g
-    -O style=emacs
-  )
-  _args=(
-      "$@"
-  )
-  # shellcheck disable=SC2059
-  _sho \
-    "$( \
-      printf \
-        "${_args[@]}")" \
-    "${_pygmentize_opts[@]}"
-}
-
-# Colorized Display function
-_sho() {
-  local \
-    _text="${1}" \
-    _pygmentize
-  _pygmentize="$( \
-    command \
-      -v \
-      "pygmentize"{,2} | \
-      head \
-        -n \
-	1)"
-  shift
-  _pygmentize_opts=(
-    "$@"
-  )
-  [[ "${color}" == "y" ]] && \
-  [[ "${_pygmentize}" != "" ]] && \
-    echo \
-      "${_text}" | 
-      "${_pygmentize}" \
-        "${_pygmentize_opts[@]}" && \
-    return
-  printf \
-    "%s\n" \
-    "${_text}"
 }
 
 _globals
@@ -561,6 +501,11 @@ out="$( \
   realpath \
     -q -- \
     "${out}")"
+shift \
+  1
+mkgrubcfg_opts=(
+  "$@"
+)
 _set_overrides
 if [ -d "${out}" ]; then
   out="${out}/$( \
@@ -574,12 +519,6 @@ if [ -d "${out}" ]; then
           "boot" \
           "method")")"
 fi
-shift \
-  1
-# shellcheck disable=SC2034
-mkgrubcfg_opts=(
-  "$@"
-)
 app_opts=(
   "$(_get \
       "boot" \
@@ -591,8 +530,7 @@ app_opts=(
       "grub" \
       "cfg")" \
   "${out}"
-  "${mkgrubcfg_opts[@]}"
 )
 _show_config
-_mkgrub \
+_make_grub \
   "${app_opts[@]}"
