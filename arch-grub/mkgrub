@@ -288,7 +288,7 @@ _grub_cfg_auto_detect() {
     mktemp \
       -d)"
   _cfg="${_tmp_dir}/grub.cfg"
-  if [[ "${quiet}" == "n" ]];
+  if [[ "${quiet}" == "n" ]]; then
     _mkgrubcfg_opts+=(
       -v
     )
