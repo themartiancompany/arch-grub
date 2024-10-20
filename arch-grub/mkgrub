@@ -241,7 +241,7 @@ _out_file_auto_detect() {
 # $2: platform (efi, pc)
 # $3: output file or directory
 #     default name: BOOT<IA32/X64>.EFI
-_make_grub() {
+_mkgrub() {
   local \
   _boot_method="${1}" \
   _arch="${2}" \
@@ -454,15 +454,16 @@ _show_config() {
       "grub" \
       "cfg")"
   _msg_info "${app_name} configuration"
-  _msg_info "                     Build Date:   $(_get "build" "date")"
-  _msg_info "             Configuration file:   ${_cfg:-Auto}"
-  _msg_info "       Plain-text configuration:   $(_get "plain" "text")"
-  _msg_info "  Configuration integrity check:   $(_get "plain" "text")"
-  _msg_info "                   Architecture:   $(_get "arch" "name")"
-  _msg_info "                     Entry name:   $(_get "entry" "name")"
-  _msg_info "                     Short name:   $(_get "short" "name")"
-  _msg_info "                    Boot Method:   $(_get "boot" "method")"
-  _msg_info "              Output file:   ${out}"
+  _msg_info "                       Build Date:   $(_get "build" "date")"
+  _msg_info "               Configuration file:   ${_cfg:-Auto}"
+  _msg_info "         Plain-text configuration:   $(_get "plain" "text")"
+  _msg_info "    Configuration integrity check:   $(_get "plain" "text")"
+  _msg_info "                     Architecture:   $(_get "arch" "name")"
+  _msg_info "                       Entry name:   $(_get "entry" "name")"
+  _msg_info "                       Short name:   $(_get "short" "name")"
+  _msg_info "                      Boot Method:   $(_get "boot" "method")"
+  _msg_info "                      Output file:   $(_get "out" "file")"
+  _msg_info " Configuration generation options:   ${mkgrub_opts[@]}"
 }
 
 _globals
@@ -502,8 +503,6 @@ shift \
   $(( \
     OPTIND - 1 \
   ))
-shift \
-  1
 mkgrubcfg_opts=(
   "$@"
 )
@@ -539,5 +538,5 @@ app_opts=(
       "file")"
 )
 _show_config
-_make_grub \
+_mkgrub \
   "${app_opts[@]}"

@@ -606,7 +606,7 @@ _set_overrides() {
     ""
   _set \
     "ucode" \
-    "memdisk" \
+    "boot.img" \
     "/$(_ucode_auto_detect)"
   _set \
     "initrd" \
