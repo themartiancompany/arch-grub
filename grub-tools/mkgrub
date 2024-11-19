@@ -50,10 +50,7 @@ _get_cfg_path() {
     _local_path \
     _path
   _sys_path="$( \
-    _get_usr)/lib/$( \
-      _get \
-        "app" \
-	"name")/configs"
+    _get_usr)/lib/grub-tools/configs"
   _local_path="$( \
     dirname \
       "$(_get_script_dir)")/configs"
